@@ -133,7 +133,7 @@ class CameraProcessor:
         if PI_CAMERA_AVAILABLE:
             self._camera = Picamera2()
             config = self._camera.create_preview_configuration(
-                main={"size": self.resolution, "format": "RGB888"},
+                main={"size": self.resolution, "format": "BGR888"},
                 buffer_count=4
             )
             self._camera.configure(config)
@@ -165,8 +165,7 @@ class CameraProcessor:
     def _capture_frame(self):
         """Capture a frame from the camera."""
         if PI_CAMERA_AVAILABLE and self._camera:
-            frame = self._camera.capture_array("main")
-            return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            return self._camera.capture_array("main")
         elif self._camera:
             ret, frame = self._camera.read()
             return frame if ret else None
