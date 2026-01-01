@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Counter - Configuration</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .header {
+            background: #16213e;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #0f3460;
+        }
+        .header h1 { font-size: 1.5rem; color: #00d9ff; }
+        .nav-link {
+            color: #00d9ff;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border: 1px solid #00d9ff;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .nav-link:hover { background: #00d9ff; color: #1a1a2e; }
+        .container {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .editor-container {
+            position: relative;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .editor-container img {
+            width: 100%;
+            display: block;
+            pointer-events: none;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        .controls {
+            background: #16213e;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-top: 1.5rem;
+        }
+        .control-row {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #888;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+        select, input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+            background: #1a1a2e;
+            color: #eee;
+            font-size: 1rem;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+        .coords {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .coord-input {
+            text-align: center;
+        }
+        .coord-input label {
+            font-size: 0.75rem;
+            color: #666;
+        }
+        .btn-row {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        .btn {
+            flex: 1;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #00d9ff; color: #1a1a2e; }
+        .btn-primary:hover { background: #00b8d4; }
+        .btn-secondary { background: #0f3460; color: #eee; }
+        .btn-secondary:hover { background: #16213e; }
+        .btn-danger { background: #e94560; color: white; }
+        .btn-danger:hover { background: #ff6b6b; }
+        .help {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #0f3460;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+        .help strong { color: #00d9ff; }
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #00d9ff;
+            color: #1a1a2e;
+            padding: 1rem 2rem;
+            border-radius: 4px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Configuration</h1>
+        <a href="/" class="nav-link">Dashboard</a>
+    </div>
+
+    <div class="container">
+        <div class="editor-container">
+            <img id="video" src="/video_feed" alt="Live Stream">
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="controls">
+            <div class="control-row">
+                <div class="control-group">
+                    <label>Detection Mode</label>
+                    <select id="mode">
+                        <option value="person">Library Mode (Humans)</option>
+                        <option value="vehicle">Parking Mode (Vehicles)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="coords">
+                <div class="coord-input">
+                    <label>X1</label>
+                    <input type="number" id="x1" min="0" max="{{ width }}">
+                </div>
+                <div class="coord-input">
+                    <label>Y1</label>
+                    <input type="number" id="y1" min="0" max="{{ height }}">
+                </div>
+                <div class="coord-input">
+                    <label>X2</label>
+                    <input type="number" id="x2" min="0" max="{{ width }}">
+                </div>
+                <div class="coord-input">
+                    <label>Y2</label>
+                    <input type="number" id="y2" min="0" max="{{ height }}">
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="saveConfig()">Save Configuration</button>
+                <button class="btn btn-secondary" onclick="resetLine()">Reset Line</button>
+                <button class="btn btn-danger" onclick="resetCounters()">Reset Counters</button>
+            </div>
+
+            <div class="help">
+                <strong>Drag the endpoints</strong> to reposition the counting line.
+                Green circle = Start point, Red circle = End point.
+                Objects crossing from right-to-left (relative to line direction) count as IN.
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">Saved!</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const video = document.getElementById('video');
+
+        // Video dimensions from server
+        const VIDEO_W = {{ width }};
+        const VIDEO_H = {{ height }};
+
+        // Line coordinates
+        let line = {{ line | tojson }};
+        let mode = '{{ mode }}';
+
+        // Drag state
+        let dragging = null;
+        const HANDLE_RADIUS = 12;
+
+        // Initialize
+        document.getElementById('mode').value = mode;
+        updateInputs();
+
+        function resizeCanvas() {
+            const rect = video.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            draw();
+        }
+
+        function toCanvas(x, y) {
+            return [
+                (x / VIDEO_W) * canvas.width,
+                (y / VIDEO_H) * canvas.height
+            ];
+        }
+
+        function toVideo(x, y) {
+            return [
+                Math.round((x / canvas.width) * VIDEO_W),
+                Math.round((y / canvas.height) * VIDEO_H)
+            ];
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const [cx1, cy1] = toCanvas(line[0], line[1]);
+            const [cx2, cy2] = toCanvas(line[2], line[3]);
+
+            // Draw line
+            ctx.beginPath();
+            ctx.moveTo(cx1, cy1);
+            ctx.lineTo(cx2, cy2);
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Draw direction arrow
+            const midX = (cx1 + cx2) / 2;
+            const midY = (cy1 + cy2) / 2;
+            const angle = Math.atan2(cy2 - cy1, cx2 - cx1);
+            const arrowLen = 20;
+
+            ctx.beginPath();
+            ctx.moveTo(midX, midY);
+            ctx.lineTo(
+                midX - arrowLen * Math.cos(angle - Math.PI/6),
+                midY - arrowLen * Math.sin(angle - Math.PI/6)
+            );
+            ctx.moveTo(midX, midY);
+            ctx.lineTo(
+                midX - arrowLen * Math.cos(angle + Math.PI/6),
+                midY - arrowLen * Math.sin(angle + Math.PI/6)
+            );
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw handles
+            ctx.beginPath();
+            ctx.arc(cx1, cy1, HANDLE_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = '#00ff88';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(cx2, cy2, HANDLE_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = '#ff6b6b';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        function updateInputs() {
+            document.getElementById('x1').value = line[0];
+            document.getElementById('y1').value = line[1];
+            document.getElementById('x2').value = line[2];
+            document.getElementById('y2').value = line[3];
+        }
+
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return [e.clientX - rect.left, e.clientY - rect.top];
+        }
+
+        function hitTest(mx, my, px, py) {
+            const dx = mx - px;
+            const dy = my - py;
+            return Math.sqrt(dx*dx + dy*dy) < HANDLE_RADIUS * 1.5;
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const [mx, my] = getMousePos(e);
+            const [cx1, cy1] = toCanvas(line[0], line[1]);
+            const [cx2, cy2] = toCanvas(line[2], line[3]);
+
+            if (hitTest(mx, my, cx1, cy1)) {
+                dragging = 'start';
+            } else if (hitTest(mx, my, cx2, cy2)) {
+                dragging = 'end';
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!dragging) return;
+
+            const [mx, my] = getMousePos(e);
+            const [vx, vy] = toVideo(mx, my);
+
+            // Clamp to bounds
+            const x = Math.max(0, Math.min(VIDEO_W, vx));
+            const y = Math.max(0, Math.min(VIDEO_H, vy));
+
+            if (dragging === 'start') {
+                line[0] = x;
+                line[1] = y;
+            } else {
+                line[2] = x;
+                line[3] = y;
+            }
+
+            updateInputs();
+            draw();
+        });
+
+        canvas.addEventListener('mouseup', () => { dragging = null; });
+        canvas.addEventListener('mouseleave', () => { dragging = null; });
+
+        // Input change handlers
+        ['x1', 'y1', 'x2', 'y2'].forEach((id, i) => {
+            document.getElementById(id).addEventListener('change', (e) => {
+                line[i] = parseInt(e.target.value) || 0;
+                draw();
+            });
+        });
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+
+        async function saveConfig() {
+            mode = document.getElementById('mode').value;
+            try {
+                const res = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ line, mode })
+                });
+                if (res.ok) showToast('Configuration saved!');
+            } catch (e) {
+                showToast('Error saving configuration');
+            }
+        }
+
+        function resetLine() {
+            line = [0, VIDEO_H / 2, VIDEO_W, VIDEO_H / 2];
+            updateInputs();
+            draw();
+        }
+
+        async function resetCounters() {
+            if (!confirm('Reset all counters to zero?')) return;
+            try {
+                await fetch('/api/reset', { method: 'POST' });
+                showToast('Counters reset!');
+            } catch (e) {
+                showToast('Error resetting counters');
+            }
+        }
+
+        // Initialize canvas when video loads
+        video.addEventListener('load', resizeCanvas);
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+    </script>
+</body>
+</html>

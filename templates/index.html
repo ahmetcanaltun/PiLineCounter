@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Counter - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .header {
+            background: #16213e;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #0f3460;
+        }
+        .header h1 { font-size: 1.5rem; color: #00d9ff; }
+        .nav-link {
+            color: #00d9ff;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border: 1px solid #00d9ff;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .nav-link:hover { background: #00d9ff; color: #1a1a2e; }
+        .container {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .video-container {
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .video-container img {
+            width: 100%;
+            display: block;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        .stat-card {
+            background: #16213e;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-card.in { border-left: 4px solid #00ff88; }
+        .stat-card.out { border-left: 4px solid #ff6b6b; }
+        .stat-card.mode { border-left: 4px solid #00d9ff; }
+        .stat-label { font-size: 0.85rem; color: #888; text-transform: uppercase; }
+        .stat-value { font-size: 2.5rem; font-weight: bold; margin-top: 0.5rem; }
+        .stat-card.in .stat-value { color: #00ff88; }
+        .stat-card.out .stat-value { color: #ff6b6b; }
+        .stat-card.mode .stat-value { color: #00d9ff; font-size: 1.5rem; }
+        .actions { margin-top: 1.5rem; text-align: center; }
+        .btn {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #ff6b6b; }
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Traffic Counter</h1>
+        <a href="/config" class="nav-link">Settings</a>
+    </div>
+
+    <div class="container">
+        <div class="video-container">
+            <img src="/video_feed" alt="Live Stream">
+        </div>
+
+        <div class="stats">
+            <div class="stat-card in">
+                <div class="stat-label">Entered</div>
+                <div class="stat-value" id="count-in">0</div>
+            </div>
+            <div class="stat-card out">
+                <div class="stat-label">Exited</div>
+                <div class="stat-value" id="count-out">0</div>
+            </div>
+            <div class="stat-card mode">
+                <div class="stat-label">Mode</div>
+                <div class="stat-value" id="mode">-</div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn" onclick="resetCounters()">Reset Counters</button>
+        </div>
+    </div>
+
+    <div class="footer">
+        Edge AI Traffic Counter &bull; Raspberry Pi 5
+    </div>
+
+    <script>
+        async function fetchData() {
+            try {
+                const res = await fetch('/api/data');
+                const data = await res.json();
+                document.getElementById('count-in').textContent = data.counts.in;
+                document.getElementById('count-out').textContent = data.counts.out;
+                document.getElementById('mode').textContent = data.mode.toUpperCase();
+            } catch (e) {
+                console.error('Failed to fetch data:', e);
+            }
+        }
+
+        async function resetCounters() {
+            if (!confirm('Reset all counters to zero?')) return;
+            try {
+                await fetch('/api/reset', { method: 'POST' });
+                fetchData();
+            } catch (e) {
+                console.error('Failed to reset:', e);
+            }
+        }
+
+        fetchData();
+        setInterval(fetchData, 1000);
+    </script>
+</body>
+</html>
