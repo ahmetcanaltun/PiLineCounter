@@ -32,6 +32,7 @@ def config_page():
     return render_template('config.html',
                          line=data['line'],
                          mode=data['mode'],
+                         flip_direction=data['flip_direction'],
                          width=resolution[0],
                          height=resolution[1])
 

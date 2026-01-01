@@ -124,6 +124,17 @@
         .btn-secondary:hover { background: #16213e; }
         .btn-danger { background: #e94560; color: white; }
         .btn-danger:hover { background: #ff6b6b; }
+        .btn-direction {
+            background: #9b59b6;
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn-direction:hover { background: #8e44ad; }
+        .btn-direction .arrow { font-size: 1.2rem; }
         .help {
             margin-top: 1rem;
             padding: 1rem;
@@ -171,6 +182,13 @@
                         <option value="vehicle">Parking Mode (Vehicles)</option>
                     </select>
                 </div>
+                <div class="control-group">
+                    <label>Direction</label>
+                    <button class="btn btn-direction" id="directionBtn" onclick="toggleDirection()">
+                        <span class="arrow" id="directionArrow">⬆️</span>
+                        <span id="directionLabel">IN</span>
+                    </button>
+                </div>
             </div>
 
             <div class="coords">
@@ -200,8 +218,7 @@
 
             <div class="help">
                 <strong>Drag the endpoints</strong> to reposition the counting line.
-                Green circle = Start point, Red circle = End point.
-                Objects crossing from right-to-left (relative to line direction) count as IN.
+                Use the <strong>Direction</strong> button to swap IN/OUT sides.
             </div>
         </div>
     </div>
@@ -220,6 +237,7 @@
         // Line coordinates
         let line = {{ line | tojson }};
         let mode = '{{ mode }}';
+        let flipDirection = {{ flip_direction | tojson }};
 
         // Drag state
         let dragging = null;
@@ -228,6 +246,7 @@
         // Initialize
         document.getElementById('mode').value = mode;
         updateInputs();
+        updateDirectionButton();
 
         function resizeCanvas() {
             const rect = video.getBoundingClientRect();
@@ -373,13 +392,30 @@
             setTimeout(() => toast.classList.remove('show'), 2000);
         }
 
+        function updateDirectionButton() {
+            const arrow = document.getElementById('directionArrow');
+            const label = document.getElementById('directionLabel');
+            if (flipDirection) {
+                arrow.textContent = '⬇️';
+                label.textContent = 'OUT';
+            } else {
+                arrow.textContent = '⬆️';
+                label.textContent = 'IN';
+            }
+        }
+
+        function toggleDirection() {
+            flipDirection = !flipDirection;
+            updateDirectionButton();
+        }
+
         async function saveConfig() {
             mode = document.getElementById('mode').value;
             try {
                 const res = await fetch('/api/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ line, mode })
+                    body: JSON.stringify({ line, mode, flip_direction: flipDirection })
                 });
                 if (res.ok) showToast('Configuration saved!');
             } catch (e) {
