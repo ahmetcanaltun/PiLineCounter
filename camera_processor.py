@@ -157,8 +157,8 @@ class CameraProcessor:
     def _init_model(self):
         """Initialize YOLO model."""
         if YOLO_AVAILABLE:
-            self._model = YOLO('yolov8n.pt')
-            print("[INFO] YOLOv8n model loaded")
+            self._model = YOLO('yolov8n_ncnn_model')
+            print("[INFO] YOLOv8n NCNN model loaded")
         else:
             print("[WARN] Running without detection model")
 
