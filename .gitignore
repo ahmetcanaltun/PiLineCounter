@@ -1,0 +1,19 @@
+# Runtime config
+config.json
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# YOLO model
+*.pt
+
+# macOS
+.DS_Store
+
+# Local notes and documents
+*.docx
+*.pdf
+~$*
