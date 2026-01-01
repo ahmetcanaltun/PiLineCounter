@@ -58,13 +58,14 @@ def api_reset():
 
 @app.route('/api/config', methods=['POST'])
 def api_config():
-    """Update line coordinates and/or mode."""
+    """Update line coordinates, mode, and/or direction."""
     data = request.get_json()
 
     line = data.get('line')
     mode = data.get('mode')
+    flip_direction = data.get('flip_direction')
 
-    processor.update_config(line=line, mode=mode)
+    processor.update_config(line=line, mode=mode, flip_direction=flip_direction)
 
     return jsonify({'status': 'ok', 'data': processor.get_data()})
 

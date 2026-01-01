@@ -71,6 +71,9 @@ class CameraProcessor:
         # Detection mode: 'person' or 'vehicle'
         self._mode = 'person'
 
+        # Flip IN/OUT direction
+        self._flip_direction = False
+
         # Tracking state
         self._track_history = defaultdict(list)
         self._counted_ids = set()
@@ -90,10 +93,11 @@ class CameraProcessor:
                     config = json.load(f)
                     self._line = config.get('line', self._line)
                     self._mode = config.get('mode', 'person')
+                    self._flip_direction = config.get('flip_direction', False)
                     counts = config.get('counts', {})
                     self._count_in = counts.get('in', 0)
                     self._count_out = counts.get('out', 0)
-                    print(f"[INFO] Config loaded: mode={self._mode}, line={self._line}")
+                    print(f"[INFO] Config loaded: mode={self._mode}, flip={self._flip_direction}, line={self._line}")
             except Exception as e:
                 print(f"[WARN] Failed to load config: {e}")
 
@@ -102,6 +106,7 @@ class CameraProcessor:
         config = {
             'line': self._line,
             'mode': self._mode,
+            'flip_direction': self._flip_direction,
             'counts': {
                 'in': self._count_in,
                 'out': self._count_out
@@ -174,7 +179,7 @@ class CameraProcessor:
     def _get_direction(self, prev_point, curr_point):
         """
         Determine crossing direction using vector cross product.
-        Positive cross product = IN, Negative = OUT
+        Positive cross product = IN, Negative = OUT (flipped if flip_direction is True)
         """
         line_start = (self._line[0], self._line[1])
         line_end = (self._line[2], self._line[3])
@@ -183,7 +188,12 @@ class CameraProcessor:
         move_vec = np.array([curr_point[0] - prev_point[0], curr_point[1] - prev_point[1]])
 
         cross = line_vec[0] * move_vec[1] - line_vec[1] * move_vec[0]
-        return 'in' if cross > 0 else 'out'
+        direction = 'in' if cross > 0 else 'out'
+
+        if self._flip_direction:
+            direction = 'out' if direction == 'in' else 'in'
+
+        return direction
 
     def _process_frame(self, frame):
         """Run detection, tracking, and counting on a frame."""
@@ -195,12 +205,14 @@ class CameraProcessor:
         line_start = (self._line[0], self._line[1])
         line_end = (self._line[2], self._line[3])
 
-        # Draw virtual counting line
-        cv2.line(display_frame, line_start, line_end, (0, 255, 255), 3)
+        # Draw virtual counting line (bright magenta for visibility)
+        cv2.line(display_frame, line_start, line_end, (255, 0, 255), 4)
 
-        # Draw endpoint circles
-        cv2.circle(display_frame, line_start, 8, (0, 255, 0), -1)
-        cv2.circle(display_frame, line_end, 8, (0, 0, 255), -1)
+        # Draw endpoint circles (white with colored border)
+        cv2.circle(display_frame, line_start, 10, (255, 255, 255), -1)
+        cv2.circle(display_frame, line_start, 10, (255, 0, 255), 2)
+        cv2.circle(display_frame, line_end, 10, (255, 255, 255), -1)
+        cv2.circle(display_frame, line_end, 10, (255, 0, 255), 2)
 
         if self._model is None:
             self._draw_overlay(display_frame)
@@ -256,46 +268,87 @@ class CameraProcessor:
                     self._counted_ids.add(track_id)
                     print(f"[COUNT] {self.CLASS_NAMES.get(cls, 'obj')} #{track_id} -> {direction.upper()} | Total: IN={self._count_in}, OUT={self._count_out}")
 
-            # Draw bounding box
-            color = (0, 255, 0) if track_id in self._counted_ids else (255, 128, 0)
-            cv2.rectangle(display_frame, (x1, y1), (x2, y2), color, 2)
+            # Draw bounding box (cyan for active, green for counted)
+            color = (0, 255, 100) if track_id in self._counted_ids else (255, 255, 0)
+            cv2.rectangle(display_frame, (x1, y1), (x2, y2), color, 3)
 
-            # Draw label
+            # Draw label with better contrast
             label = f"{self.CLASS_NAMES.get(cls, 'obj')} #{track_id}"
-            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            cv2.rectangle(display_frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), color, -1)
-            cv2.putText(display_frame, label, (x1 + 2, y1 - 4),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            cv2.rectangle(display_frame, (x1, y1 - th - 10), (x1 + tw + 6, y1), (0, 0, 0), -1)
+            cv2.putText(display_frame, label, (x1 + 3, y1 - 5),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-            # Draw tracking trail
+            # Draw tracking trail (yellow gradient)
             points = self._track_history[track_id]
             for i in range(1, len(points)):
-                thickness = int(np.sqrt(30 / float(i + 1)) * 2)
-                cv2.line(display_frame, points[i-1], points[i], (0, 165, 255), thickness)
+                thickness = int(np.sqrt(30 / float(i + 1)) * 2.5)
+                cv2.line(display_frame, points[i-1], points[i], (0, 200, 255), thickness)
 
-            # Draw center point
-            cv2.circle(display_frame, center, 5, (0, 0, 255), -1)
+            # Draw center point (white with outline)
+            cv2.circle(display_frame, center, 6, (0, 0, 0), -1)
+            cv2.circle(display_frame, center, 4, (255, 255, 255), -1)
 
         self._draw_overlay(display_frame)
         return display_frame
 
     def _draw_overlay(self, frame):
-        """Draw counters and mode indicator on frame."""
-        # Semi-transparent background for counters
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (5, 5), (160, 100), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+        """Draw counters, mode, and direction indicator on frame."""
+        h, w = frame.shape[:2]
 
-        # Counter text
-        cv2.putText(frame, f"IN:  {self._count_in}", (15, 35),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-        cv2.putText(frame, f"OUT: {self._count_out}", (15, 65),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 128, 255), 2)
+        # Semi-transparent background for counters (top-left)
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (5, 5), (180, 130), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+
+        # Counter text with bold colors
+        cv2.putText(frame, f"IN:  {self._count_in}", (15, 40),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 100), 3)
+        cv2.putText(frame, f"OUT: {self._count_out}", (15, 80),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (100, 100, 255), 3)
 
         # Mode indicator
         mode_text = "PERSON" if self._mode == 'person' else "VEHICLE"
-        cv2.putText(frame, mode_text, (15, 90),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+        cv2.putText(frame, mode_text, (15, 110),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+        # Direction arrows near the line
+        line_cx = (self._line[0] + self._line[2]) // 2
+        line_cy = (self._line[1] + self._line[3]) // 2
+
+        # Calculate perpendicular direction for arrows
+        dx = self._line[2] - self._line[0]
+        dy = self._line[3] - self._line[1]
+        length = np.sqrt(dx*dx + dy*dy)
+        if length > 0:
+            # Perpendicular unit vector
+            px, py = -dy/length, dx/length
+
+            # Arrow offset from line center
+            offset = 50
+            arrow_len = 30
+
+            # IN arrow (green) - perpendicular direction based on flip
+            if not self._flip_direction:
+                in_x, in_y = int(line_cx + px * offset), int(line_cy + py * offset)
+                in_end_x, in_end_y = int(in_x + px * arrow_len), int(in_y + py * arrow_len)
+                out_x, out_y = int(line_cx - px * offset), int(line_cy - py * offset)
+                out_end_x, out_end_y = int(out_x - px * arrow_len), int(out_y - py * arrow_len)
+            else:
+                out_x, out_y = int(line_cx + px * offset), int(line_cy + py * offset)
+                out_end_x, out_end_y = int(out_x + px * arrow_len), int(out_y + py * arrow_len)
+                in_x, in_y = int(line_cx - px * offset), int(line_cy - py * offset)
+                in_end_x, in_end_y = int(in_x - px * arrow_len), int(in_y - py * arrow_len)
+
+            # Draw IN label and arrow
+            cv2.arrowedLine(frame, (in_end_x, in_end_y), (in_x, in_y), (0, 255, 100), 3, tipLength=0.4)
+            cv2.putText(frame, "IN", (in_x - 15, in_y - 15),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 100), 2)
+
+            # Draw OUT label and arrow
+            cv2.arrowedLine(frame, (out_end_x, out_end_y), (out_x, out_y), (100, 100, 255), 3, tipLength=0.4)
+            cv2.putText(frame, "OUT", (out_x - 20, out_y - 15),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (100, 100, 255), 2)
 
     def _run(self):
         """Main processing loop - runs in daemon thread."""
@@ -352,7 +405,8 @@ class CameraProcessor:
             return {
                 'counts': {'in': self._count_in, 'out': self._count_out},
                 'line': self._line.copy(),
-                'mode': self._mode
+                'mode': self._mode,
+                'flip_direction': self._flip_direction
             }
 
     def reset_counts(self):
@@ -365,8 +419,8 @@ class CameraProcessor:
             self._save_config()
         print("[INFO] Counters reset")
 
-    def update_config(self, line=None, mode=None):
-        """Update line coordinates and/or mode."""
+    def update_config(self, line=None, mode=None, flip_direction=None):
+        """Update line coordinates, mode, and/or direction."""
         with self._lock:
             if line is not None:
                 self._line = [int(x) for x in line]
@@ -377,8 +431,10 @@ class CameraProcessor:
                     self._mode = mode
                     self._counted_ids.clear()
                     self._track_history.clear()
+            if flip_direction is not None:
+                self._flip_direction = bool(flip_direction)
             self._save_config()
-        print(f"[INFO] Config updated: mode={self._mode}, line={self._line}")
+        print(f"[INFO] Config updated: mode={self._mode}, flip={self._flip_direction}, line={self._line}")
 
     def get_resolution(self):
         """Get camera resolution."""
