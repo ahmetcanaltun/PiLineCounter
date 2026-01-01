@@ -120,7 +120,7 @@ class CameraProcessor:
         return self.PERSON_CLASSES
 
     def _init_camera(self):
-        """Initialize camera - Picamera2 on Pi, OpenCV fallback otherwise."""
+        """Initialize camera - Picamera2 on Pi, OpenCV fallback, or test mode."""
         if PI_CAMERA_AVAILABLE:
             self._camera = Picamera2()
             config = self._camera.create_preview_configuration(
@@ -129,13 +129,21 @@ class CameraProcessor:
             )
             self._camera.configure(config)
             self._camera.start()
+            self._test_mode = False
             print(f"[INFO] Picamera2 initialized at {self.resolution}")
         else:
             self._camera = cv2.VideoCapture(0)
-            self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
-            self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
-            self._camera.set(cv2.CAP_PROP_FPS, self.framerate)
-            print(f"[INFO] OpenCV VideoCapture initialized")
+            if self._camera.isOpened():
+                self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
+                self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
+                self._camera.set(cv2.CAP_PROP_FPS, self.framerate)
+                self._test_mode = False
+                print(f"[INFO] OpenCV VideoCapture initialized")
+            else:
+                self._camera = None
+                self._test_mode = True
+                self._test_frame_count = 0
+                print(f"[INFO] No camera found - running in TEST MODE")
 
     def _init_model(self):
         """Initialize YOLO model."""
@@ -378,4 +386,4 @@ class CameraProcessor:
 
 
 # Singleton instance
-processor = CameraProcessor(resolution=(640, 480), framerate=30)
+processor = CameraProcessor(resolution=(854, 480), framerate=30)
