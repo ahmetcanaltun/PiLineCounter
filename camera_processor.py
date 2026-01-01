@@ -82,6 +82,10 @@ class CameraProcessor:
         self._camera = None
         self._model = None
 
+        # FPS tracking
+        self._fps = 0
+        self._frame_times = []
+
         # Load saved configuration
         self._load_config()
 
@@ -206,13 +210,13 @@ class CameraProcessor:
         line_end = (self._line[2], self._line[3])
 
         # Draw virtual counting line (bright magenta for visibility)
-        cv2.line(display_frame, line_start, line_end, (255, 0, 255), 4)
+        cv2.line(display_frame, line_start, line_end, (255, 0, 255), 2)
 
         # Draw endpoint circles (white with colored border)
-        cv2.circle(display_frame, line_start, 10, (255, 255, 255), -1)
-        cv2.circle(display_frame, line_start, 10, (255, 0, 255), 2)
-        cv2.circle(display_frame, line_end, 10, (255, 255, 255), -1)
-        cv2.circle(display_frame, line_end, 10, (255, 0, 255), 2)
+        cv2.circle(display_frame, line_start, 6, (255, 255, 255), -1)
+        cv2.circle(display_frame, line_start, 6, (255, 0, 255), 1)
+        cv2.circle(display_frame, line_end, 6, (255, 255, 255), -1)
+        cv2.circle(display_frame, line_end, 6, (255, 0, 255), 1)
 
         if self._model is None:
             self._draw_overlay(display_frame)
@@ -270,47 +274,51 @@ class CameraProcessor:
 
             # Draw bounding box (cyan for active, green for counted)
             color = (0, 255, 100) if track_id in self._counted_ids else (255, 255, 0)
-            cv2.rectangle(display_frame, (x1, y1), (x2, y2), color, 3)
+            cv2.rectangle(display_frame, (x1, y1), (x2, y2), color, 1)
 
             # Draw label with better contrast
             label = f"{self.CLASS_NAMES.get(cls, 'obj')} #{track_id}"
-            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-            cv2.rectangle(display_frame, (x1, y1 - th - 10), (x1 + tw + 6, y1), (0, 0, 0), -1)
-            cv2.putText(display_frame, label, (x1 + 3, y1 - 5),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)
+            cv2.rectangle(display_frame, (x1, y1 - th - 4), (x1 + tw + 4, y1), (0, 0, 0), -1)
+            cv2.putText(display_frame, label, (x1 + 2, y1 - 2),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
             # Draw tracking trail (yellow gradient)
             points = self._track_history[track_id]
             for i in range(1, len(points)):
-                thickness = int(np.sqrt(30 / float(i + 1)) * 2.5)
+                thickness = max(1, int(np.sqrt(30 / float(i + 1)) * 1.2))
                 cv2.line(display_frame, points[i-1], points[i], (0, 200, 255), thickness)
 
             # Draw center point (white with outline)
-            cv2.circle(display_frame, center, 6, (0, 0, 0), -1)
-            cv2.circle(display_frame, center, 4, (255, 255, 255), -1)
+            cv2.circle(display_frame, center, 3, (0, 0, 0), -1)
+            cv2.circle(display_frame, center, 2, (255, 255, 255), -1)
 
         self._draw_overlay(display_frame)
         return display_frame
 
     def _draw_overlay(self, frame):
-        """Draw counters, mode, and direction indicator on frame."""
+        """Draw counters, mode, FPS, and direction indicator on frame."""
         h, w = frame.shape[:2]
 
         # Semi-transparent background for counters (top-left)
         overlay = frame.copy()
-        cv2.rectangle(overlay, (5, 5), (180, 130), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+        cv2.rectangle(overlay, (4, 4), (95, 70), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
 
-        # Counter text with bold colors
-        cv2.putText(frame, f"IN:  {self._count_in}", (15, 40),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 100), 3)
-        cv2.putText(frame, f"OUT: {self._count_out}", (15, 80),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (100, 100, 255), 3)
+        # FPS indicator
+        cv2.putText(frame, f"{self._fps:.1f} fps", (8, 18),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
+
+        # Counter text
+        cv2.putText(frame, f"IN:  {self._count_in}", (8, 38),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 100), 1)
+        cv2.putText(frame, f"OUT: {self._count_out}", (8, 55),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 100, 255), 1)
 
         # Mode indicator
         mode_text = "PERSON" if self._mode == 'person' else "VEHICLE"
-        cv2.putText(frame, mode_text, (15, 110),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        cv2.putText(frame, mode_text, (8, 68),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.35, (200, 200, 200), 1)
 
         # Direction arrows near the line
         line_cx = (self._line[0] + self._line[2]) // 2
@@ -325,8 +333,8 @@ class CameraProcessor:
             px, py = -dy/length, dx/length
 
             # Arrow offset from line center
-            offset = 50
-            arrow_len = 30
+            offset = 30
+            arrow_len = 15
 
             # IN arrow (green) - perpendicular direction based on flip
             if not self._flip_direction:
@@ -341,14 +349,14 @@ class CameraProcessor:
                 in_end_x, in_end_y = int(in_x - px * arrow_len), int(in_y - py * arrow_len)
 
             # Draw IN label and arrow
-            cv2.arrowedLine(frame, (in_end_x, in_end_y), (in_x, in_y), (0, 255, 100), 3, tipLength=0.4)
-            cv2.putText(frame, "IN", (in_x - 15, in_y - 15),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 100), 2)
+            cv2.arrowedLine(frame, (in_end_x, in_end_y), (in_x, in_y), (0, 255, 100), 1, tipLength=0.4)
+            cv2.putText(frame, "IN", (in_x - 8, in_y - 8),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 100), 1)
 
             # Draw OUT label and arrow
-            cv2.arrowedLine(frame, (out_end_x, out_end_y), (out_x, out_y), (100, 100, 255), 3, tipLength=0.4)
-            cv2.putText(frame, "OUT", (out_x - 20, out_y - 15),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (100, 100, 255), 2)
+            cv2.arrowedLine(frame, (out_end_x, out_end_y), (out_x, out_y), (100, 100, 255), 1, tipLength=0.4)
+            cv2.putText(frame, "OUT", (out_x - 12, out_y - 8),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (100, 100, 255), 1)
 
     def _run(self):
         """Main processing loop - runs in daemon thread."""
@@ -356,6 +364,8 @@ class CameraProcessor:
         self._init_model()
 
         while self._running:
+            frame_start = time.time()
+
             frame = self._capture_frame()
             if frame is None:
                 time.sleep(0.01)
@@ -364,9 +374,16 @@ class CameraProcessor:
             processed = self._process_frame(frame)
 
             if processed is not None:
-                _, buffer = cv2.imencode('.jpg', processed, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                _, buffer = cv2.imencode('.jpg', processed, [cv2.IMWRITE_JPEG_QUALITY, 92])
                 with self._frame_lock:
                     self._current_frame = buffer.tobytes()
+
+            # Calculate FPS
+            self._frame_times.append(time.time() - frame_start)
+            if len(self._frame_times) > 30:
+                self._frame_times.pop(0)
+            if self._frame_times:
+                self._fps = 1.0 / (sum(self._frame_times) / len(self._frame_times))
 
             time.sleep(0.001)  # Small yield for other threads
 
