@@ -563,6 +563,54 @@
                     </button>
                 </div>
 
+                <!-- ROI Section -->
+                <div class="coords-container" style="margin-top: 1.5rem;">
+                    <div class="section-title">🎯 ROI (İlgi Alanı)</div>
+
+                    <div class="control-row" style="margin-bottom: 1rem;">
+                        <div class="control-group">
+                            <label>ROI Durumu</label>
+                            <button class="direction-btn" id="roiToggle" onclick="toggleRoi()"
+                                style="background: rgba(255, 200, 0, 0.2); border-color: rgba(255, 200, 0, 0.4);">
+                                <span id="roiIcon">⬜</span>
+                                <span id="roiLabel">ROI Kapalı</span>
+                            </button>
+                        </div>
+                        <div class="control-group">
+                            <label>ROI Seçim Modu</label>
+                            <button class="btn btn-secondary" id="roiModeBtn" onclick="toggleRoiEditMode()">
+                                <span>✏️</span>
+                                <span id="roiModeLabel">ROI Çiz</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;">
+                        <div class="coord-input">
+                            <label>X</label>
+                            <input type="number" id="roi-x" min="0" max="{{ width }}" value="0">
+                        </div>
+                        <div class="coord-input">
+                            <label>Y</label>
+                            <input type="number" id="roi-y" min="0" max="{{ height }}" value="0">
+                        </div>
+                        <div class="coord-input">
+                            <label>Genişlik</label>
+                            <input type="number" id="roi-w" min="50" max="{{ width }}" value="{{ width }}">
+                        </div>
+                        <div class="coord-input">
+                            <label>Yükseklik</label>
+                            <input type="number" id="roi-h" min="50" max="{{ height }}" value="{{ height }}">
+                        </div>
+                    </div>
+
+                    <div class="help-box"
+                        style="margin-top: 1rem; background: rgba(255, 200, 0, 0.05); border-color: rgba(255, 200, 0, 0.2);">
+                        <strong>💡 ROI Nedir?</strong> Sadece seçili alanda algılama yaparak performansı artırır.
+                        "ROI Çiz" butonuna tıklayıp video üzerinde sürükleyerek alan seçebilirsiniz.
+                    </div>
+                </div>
+
                 <div class="help-box">
                     <strong>İpucu:</strong> Sayım çizgisini video üzerinden <strong>sürükle-bırak</strong> ile
                     konumlandırabilirsiniz.
@@ -868,6 +916,188 @@
         video.addEventListener('load', resizeCanvas);
         window.addEventListener('resize', resizeCanvas);
         setTimeout(resizeCanvas, 100);
+
+        // ========== ROI FUNCTIONALITY ==========
+
+        // ROI state
+        let roi = {{ roi | tojson if roi else 'null' }};
+        let roiEnabled = roi ? roi.enabled : false;
+        let roiEditMode = false;
+        let roiDrawStart = null;
+
+        // Initialize ROI UI
+        initRoiUI();
+
+        function initRoiUI() {
+            if (roi) {
+                document.getElementById('roi-x').value = roi.x || 0;
+                document.getElementById('roi-y').value = roi.y || 0;
+                document.getElementById('roi-w').value = roi.width || VIDEO_W;
+                document.getElementById('roi-h').value = roi.height || VIDEO_H;
+                roiEnabled = roi.enabled || false;
+            }
+            updateRoiButton();
+        }
+
+        function updateRoiButton() {
+            const icon = document.getElementById('roiIcon');
+            const label = document.getElementById('roiLabel');
+            const btn = document.getElementById('roiToggle');
+
+            if (roiEnabled) {
+                icon.textContent = '✅';
+                label.textContent = 'ROI Aktif';
+                btn.style.background = 'rgba(0, 255, 136, 0.2)';
+                btn.style.borderColor = 'rgba(0, 255, 136, 0.4)';
+            } else {
+                icon.textContent = '⬜';
+                label.textContent = 'ROI Kapalı';
+                btn.style.background = 'rgba(255, 200, 0, 0.2)';
+                btn.style.borderColor = 'rgba(255, 200, 0, 0.4)';
+            }
+        }
+
+        function toggleRoi() {
+            roiEnabled = !roiEnabled;
+            updateRoiButton();
+            saveRoi();
+        }
+
+        function toggleRoiEditMode() {
+            roiEditMode = !roiEditMode;
+            const btn = document.getElementById('roiModeBtn');
+            const label = document.getElementById('roiModeLabel');
+
+            if (roiEditMode) {
+                btn.style.background = 'rgba(255, 200, 0, 0.3)';
+                btn.style.borderColor = 'rgba(255, 200, 0, 0.6)';
+                label.textContent = 'Çizim Aktif...';
+                canvas.style.cursor = 'crosshair';
+            } else {
+                btn.style.background = '';
+                btn.style.borderColor = '';
+                label.textContent = 'ROI Çiz';
+                canvas.style.cursor = 'crosshair';
+            }
+        }
+
+        // Override draw to include ROI
+        const originalDraw = draw;
+        draw = function () {
+            originalDraw();
+            drawRoi();
+        };
+
+        function drawRoi() {
+            if (!roi || !roiEnabled) return;
+
+            const [rx, ry] = toCanvas(roi.x || 0, roi.y || 0);
+            const [rx2, ry2] = toCanvas((roi.x || 0) + (roi.width || VIDEO_W), (roi.y || 0) + (roi.height || VIDEO_H));
+            const rw = rx2 - rx;
+            const rh = ry2 - ry;
+
+            // Draw ROI rectangle
+            ctx.strokeStyle = '#ffc800';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 4]);
+            ctx.strokeRect(rx, ry, rw, rh);
+            ctx.setLineDash([]);
+
+            // ROI label
+            ctx.fillStyle = '#ffc800';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText('ROI', rx + 5, ry + 15);
+        }
+
+        // ROI drawing handlers
+        function handleRoiStart(e) {
+            if (!roiEditMode) return;
+            e.preventDefault();
+            const [mx, my] = getEventPos(e);
+            roiDrawStart = { x: mx, y: my };
+        }
+
+        function handleRoiMove(e) {
+            if (!roiEditMode || !roiDrawStart) return;
+            e.preventDefault();
+
+            const [mx, my] = getEventPos(e);
+            const [vx1, vy1] = toVideo(roiDrawStart.x, roiDrawStart.y);
+            const [vx2, vy2] = toVideo(mx, my);
+
+            // Calculate ROI bounds
+            const x = Math.min(vx1, vx2);
+            const y = Math.min(vy1, vy2);
+            const w = Math.abs(vx2 - vx1);
+            const h = Math.abs(vy2 - vy1);
+
+            roi = { enabled: true, x, y, width: w, height: h };
+            roiEnabled = true;
+
+            // Update inputs
+            document.getElementById('roi-x').value = x;
+            document.getElementById('roi-y').value = y;
+            document.getElementById('roi-w').value = w;
+            document.getElementById('roi-h').value = h;
+
+            draw();
+        }
+
+        function handleRoiEnd(e) {
+            if (!roiEditMode || !roiDrawStart) return;
+            roiDrawStart = null;
+            updateRoiButton();
+            toggleRoiEditMode(); // Exit edit mode
+            saveRoi();
+        }
+
+        // Add ROI event listeners
+        canvas.addEventListener('mousedown', handleRoiStart);
+        canvas.addEventListener('mousemove', handleRoiMove);
+        canvas.addEventListener('mouseup', handleRoiEnd);
+        canvas.addEventListener('touchstart', handleRoiStart, { passive: false });
+        canvas.addEventListener('touchmove', handleRoiMove, { passive: false });
+        canvas.addEventListener('touchend', handleRoiEnd);
+
+        // ROI input change handlers
+        ['roi-x', 'roi-y', 'roi-w', 'roi-h'].forEach(id => {
+            document.getElementById(id).addEventListener('change', () => {
+                roi = {
+                    enabled: roiEnabled,
+                    x: parseInt(document.getElementById('roi-x').value) || 0,
+                    y: parseInt(document.getElementById('roi-y').value) || 0,
+                    width: parseInt(document.getElementById('roi-w').value) || VIDEO_W,
+                    height: parseInt(document.getElementById('roi-h').value) || VIDEO_H
+                };
+                draw();
+            });
+        });
+
+        async function saveRoi() {
+            const roiData = roiEnabled ? {
+                enabled: true,
+                x: parseInt(document.getElementById('roi-x').value) || 0,
+                y: parseInt(document.getElementById('roi-y').value) || 0,
+                width: parseInt(document.getElementById('roi-w').value) || VIDEO_W,
+                height: parseInt(document.getElementById('roi-h').value) || VIDEO_H
+            } : { enabled: false, x: 0, y: 0, width: VIDEO_W, height: VIDEO_H };
+
+            try {
+                const res = await fetch('/api/roi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(roiData)
+                });
+                if (res.ok) {
+                    showToast('✓ ROI kaydedildi!');
+                }
+            } catch (e) {
+                showToast('ROI kaydetme hatası!', true);
+            }
+        }
+
+        // Initial draw with ROI
+        setTimeout(draw, 200);
     </script>
 </body>
 
