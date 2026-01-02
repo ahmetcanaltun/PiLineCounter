@@ -247,18 +247,14 @@ class CameraProcessor:
             rw = min(rw, frame.shape[1] - rx)
             rh = min(rh, frame.shape[0] - ry)
 
-            detect_frame = frame[ry:ry+rh, rx:rx+rw]
-            roi_offset_x, roi_offset_y = rx, ry
-
-            # Draw ROI rectangle on display frame
-            cv2.rectangle(display_frame, (rx, ry), (rx+rw, ry+rh), (255, 200, 0), 2)
-            cv2.putText(display_frame, "ROI", (rx + 5, ry + 20),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 1)
-
-            # Darken area outside ROI
-            mask = np.ones(display_frame.shape[:2], dtype=np.uint8)
-            mask[ry:ry+rh, rx:rx+rw] = 0
-            display_frame[mask == 1] = (display_frame[mask == 1] * 0.4).astype(np.uint8)
+            # Only crop if ROI is large enough (min 100x100)
+            if rw >= 100 and rh >= 100:
+                detect_frame = frame[ry:ry+rh, rx:rx+rw]
+                roi_offset_x, roi_offset_y = rx, ry
+                # Draw ROI rectangle
+                cv2.rectangle(display_frame, (rx, ry), (rx+rw, ry+rh), (0, 200, 255), 2)
+                cv2.putText(display_frame, "ROI", (rx + 5, ry + 20),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1)
 
         # Run YOLO tracking with mode-based class filtering
         active_classes = self._get_active_classes()
