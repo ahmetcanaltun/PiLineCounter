@@ -74,6 +74,10 @@ class CameraProcessor:
         # Flip IN/OUT direction
         self._flip_direction = False
 
+        # ROI (Region of Interest) - None means full frame
+        # Format: {'enabled': bool, 'x': int, 'y': int, 'width': int, 'height': int}
+        self._roi = None
+
         # Tracking state
         self._track_history = defaultdict(list)
         self._counted_ids = set()
@@ -101,7 +105,10 @@ class CameraProcessor:
                     counts = config.get('counts', {})
                     self._count_in = counts.get('in', 0)
                     self._count_out = counts.get('out', 0)
-                    print(f"[INFO] Config loaded: mode={self._mode}, flip={self._flip_direction}, line={self._line}")
+                    # Load ROI config
+                    self._roi = config.get('roi', None)
+                    roi_status = f", roi={self._roi['enabled']}" if self._roi else ""
+                    print(f"[INFO] Config loaded: mode={self._mode}, flip={self._flip_direction}, line={self._line}{roi_status}")
             except Exception as e:
                 print(f"[WARN] Failed to load config: {e}")
 
@@ -111,6 +118,7 @@ class CameraProcessor:
             'line': self._line,
             'mode': self._mode,
             'flip_direction': self._flip_direction,
+            'roi': self._roi,
             'counts': {
                 'in': self._count_in,
                 'out': self._count_out
@@ -223,11 +231,40 @@ class CameraProcessor:
             self._draw_overlay(display_frame)
             return display_frame
 
+        # ROI processing - crop frame if ROI is enabled
+        roi_offset_x, roi_offset_y = 0, 0
+        detect_frame = frame
+
+        if self._roi and self._roi.get('enabled', False):
+            rx = max(0, self._roi.get('x', 0))
+            ry = max(0, self._roi.get('y', 0))
+            rw = self._roi.get('width', frame.shape[1])
+            rh = self._roi.get('height', frame.shape[0])
+
+            # Clamp to frame bounds
+            rx = min(rx, frame.shape[1] - 1)
+            ry = min(ry, frame.shape[0] - 1)
+            rw = min(rw, frame.shape[1] - rx)
+            rh = min(rh, frame.shape[0] - ry)
+
+            detect_frame = frame[ry:ry+rh, rx:rx+rw]
+            roi_offset_x, roi_offset_y = rx, ry
+
+            # Draw ROI rectangle on display frame
+            cv2.rectangle(display_frame, (rx, ry), (rx+rw, ry+rh), (255, 200, 0), 2)
+            cv2.putText(display_frame, "ROI", (rx + 5, ry + 20),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 1)
+
+            # Darken area outside ROI
+            mask = np.ones(display_frame.shape[:2], dtype=np.uint8)
+            mask[ry:ry+rh, rx:rx+rw] = 0
+            display_frame[mask == 1] = (display_frame[mask == 1] * 0.4).astype(np.uint8)
+
         # Run YOLO tracking with mode-based class filtering
         active_classes = self._get_active_classes()
 
         results = self._model.track(
-            frame,
+            detect_frame,
             persist=True,
             tracker="bytetrack.yaml",
             classes=active_classes,
@@ -240,6 +277,13 @@ class CameraProcessor:
 
         boxes = results[0].boxes.xyxy.cpu().numpy()
         track_ids = results[0].boxes.id.cpu().numpy().astype(int)
+
+        # Apply ROI offset to boxes
+        if roi_offset_x > 0 or roi_offset_y > 0:
+            boxes[:, 0] += roi_offset_x  # x1
+            boxes[:, 1] += roi_offset_y  # y1
+            boxes[:, 2] += roi_offset_x  # x2
+            boxes[:, 3] += roi_offset_y  # y2
         classes = results[0].boxes.cls.cpu().numpy().astype(int)
 
         for box, track_id, cls in zip(boxes, track_ids, classes):
@@ -424,7 +468,8 @@ class CameraProcessor:
                 'counts': {'in': self._count_in, 'out': self._count_out},
                 'line': self._line.copy(),
                 'mode': self._mode,
-                'flip_direction': self._flip_direction
+                'flip_direction': self._flip_direction,
+                'roi': self._roi.copy() if self._roi else None
             }
 
     def reset_counts(self):
@@ -453,6 +498,23 @@ class CameraProcessor:
                 self._flip_direction = bool(flip_direction)
             self._save_config()
         print(f"[INFO] Config updated: mode={self._mode}, flip={self._flip_direction}, line={self._line}")
+
+    def update_roi(self, roi):
+        """Update ROI configuration."""
+        with self._lock:
+            if roi is None:
+                self._roi = None
+            else:
+                self._roi = {
+                    'enabled': bool(roi.get('enabled', False)),
+                    'x': int(roi.get('x', 0)),
+                    'y': int(roi.get('y', 0)),
+                    'width': int(roi.get('width', self.resolution[0])),
+                    'height': int(roi.get('height', self.resolution[1]))
+                }
+            self._save_config()
+        roi_status = f"enabled={self._roi['enabled']}" if self._roi else "disabled"
+        print(f"[INFO] ROI updated: {roi_status}")
 
     def get_resolution(self):
         """Get camera resolution."""

@@ -33,6 +33,7 @@ def config_page():
                          line=data['line'],
                          mode=data['mode'],
                          flip_direction=data['flip_direction'],
+                         roi=data['roi'],
                          width=resolution[0],
                          height=resolution[1])
 
@@ -68,6 +69,14 @@ def api_config():
 
     processor.update_config(line=line, mode=mode, flip_direction=flip_direction)
 
+    return jsonify({'status': 'ok', 'data': processor.get_data()})
+
+
+@app.route('/api/roi', methods=['POST'])
+def api_roi():
+    """Update ROI (Region of Interest) configuration."""
+    data = request.get_json()
+    processor.update_roi(data)
     return jsonify({'status': 'ok', 'data': processor.get_data()})
 
 
