@@ -1,291 +1,822 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Traffic Counter</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
-            color: #fff;
-            min-height: 100vh;
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #ffffff;
+            --text-secondary: #888899;
+            --accent-cyan: #00d4ff;
+            --accent-green: #00ff88;
+            --accent-red: #ff4466;
+            --accent-purple: #aa66ff;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
         }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(170, 102, 255, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(0, 255, 136, 0.04) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .app {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
         .header {
-            background: rgba(0,0,0,0.3);
-            backdrop-filter: blur(10px);
-            padding: 1rem 2rem;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 0.75rem 1.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
+
         .logo {
             display: flex;
             align-items: center;
             gap: 0.75rem;
         }
+
         .logo-icon {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, #00d9ff, #00ff88);
-            border-radius: 8px;
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
-        }
-        .logo h1 {
             font-size: 1.3rem;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        }
+
+        .logo-text h1 {
+            font-size: 1.2rem;
             font-weight: 600;
-            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
+
+        .logo-text span {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
         .header-right {
             display: flex;
             align-items: center;
             gap: 1rem;
         }
-        .status-badge {
+
+        .live-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.4rem 0.8rem;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: var(--accent-green);
+            font-weight: 500;
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .clock {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .settings-btn {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.8rem;
-            color: #888;
-        }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: #00ff88;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .nav-link {
-            color: #fff;
-            text-decoration: none;
             padding: 0.5rem 1rem;
-            background: rgba(255,255,255,0.1);
-            border-radius: 8px;
-            font-size: 0.9rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 0.85rem;
             transition: all 0.2s;
         }
-        .nav-link:hover {
-            background: rgba(0,217,255,0.2);
+
+        .settings-btn:hover {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: var(--accent-cyan);
         }
+
+        /* Main Content */
         .container {
-            max-width: 1100px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 1.5rem;
         }
+
         .main-grid {
             display: grid;
-            grid-template-columns: 1fr 300px;
+            grid-template-columns: 1fr 320px;
             gap: 1.5rem;
         }
-        @media (max-width: 900px) {
+
+        @media (max-width: 1024px) {
             .main-grid {
                 grid-template-columns: 1fr;
             }
         }
-        .video-container {
-            background: #000;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-            position: relative;
+
+        /* Video Section */
+        .video-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
         }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--glass-border);
+        }
+
         .video-container img {
             width: 100%;
             display: block;
         }
-        .video-overlay {
+
+        .video-controls {
+            position: absolute;
+            bottom: 1rem;
+            right: 1rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .video-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: white;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-btn:hover {
+            background: rgba(0, 212, 255, 0.3);
+            border-color: var(--accent-cyan);
+        }
+
+        .mode-indicator {
             position: absolute;
             top: 1rem;
-            right: 1rem;
-            background: rgba(0,0,0,0.6);
+            left: 1rem;
+            padding: 0.4rem 0.8rem;
+            background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(10px);
-            padding: 0.5rem 0.75rem;
             border-radius: 8px;
             font-size: 0.75rem;
-            color: #00ff88;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border: 1px solid rgba(0, 212, 255, 0.3);
         }
+
+        /* Chart Container */
+        .chart-container {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 1.25rem;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .chart-title {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.75rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.in { background: var(--accent-green); }
+        .legend-dot.out { background: var(--accent-red); }
+
+        .chart-wrapper {
+            height: 150px;
+        }
+
+        /* Sidebar */
         .sidebar {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 1.25rem;
         }
-        .card {
-            background: rgba(255,255,255,0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 16px;
-            padding: 1.25rem;
+
+        /* Occupancy Ring */
+        .occupancy-card {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.08), rgba(170, 102, 255, 0.08));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 24px;
+            padding: 2rem;
+            text-align: center;
         }
-        .card-header {
+
+        .ring-container {
+            position: relative;
+            width: 160px;
+            height: 160px;
+            margin: 0 auto 1rem;
+        }
+
+        .ring-svg {
+            transform: rotate(-90deg);
+        }
+
+        .ring-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 12;
+        }
+
+        .ring-progress {
+            fill: none;
+            stroke: url(#gradient);
+            stroke-width: 12;
+            stroke-linecap: round;
+            stroke-dasharray: 408;
+            stroke-dashoffset: 408;
+            transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .ring-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .ring-number {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+        }
+
+        .ring-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .occupancy-title {
             font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            color: #666;
-            margin-bottom: 0.75rem;
+            color: var(--text-secondary);
         }
-        .counter-card {
-            text-align: center;
-        }
-        .counter-value {
-            font-size: 3rem;
-            font-weight: 700;
-            line-height: 1;
-        }
-        .counter-label {
-            font-size: 0.85rem;
-            color: #888;
-            margin-top: 0.25rem;
-        }
-        .counter-card.in .counter-value {
-            color: #00ff88;
-        }
-        .counter-card.out .counter-value {
-            color: #ff6b6b;
-        }
-        .occupancy-card {
-            background: linear-gradient(135deg, rgba(0,217,255,0.1), rgba(0,255,136,0.1));
-            border-color: rgba(0,217,255,0.3);
-        }
-        .occupancy-value {
-            font-size: 3.5rem;
-            font-weight: 700;
-            text-align: center;
-            background: linear-gradient(90deg, #00d9ff, #00ff88);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .occupancy-label {
-            text-align: center;
-            font-size: 0.85rem;
-            color: #888;
-        }
+
+        /* Counter Cards */
         .counter-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
         }
-        .info-row {
+
+        .counter-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.25rem;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .counter-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .counter-card.in {
+            border-color: rgba(0, 255, 136, 0.2);
+        }
+
+        .counter-card.out {
+            border-color: rgba(255, 68, 102, 0.2);
+        }
+
+        .counter-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .counter-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .counter-card.in .counter-value {
+            color: var(--accent-green);
+        }
+
+        .counter-card.out .counter-value {
+            color: var(--accent-red);
+        }
+
+        .counter-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 0.25rem;
+        }
+
+        /* Status Card */
+        .status-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.25rem;
+        }
+
+        .status-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--glass-border);
         }
-        .info-row:last-child {
+
+        .status-row:last-child {
             border-bottom: none;
         }
-        .info-label {
-            color: #666;
+
+        .status-label {
             font-size: 0.85rem;
+            color: var(--text-secondary);
         }
-        .info-value {
-            color: #fff;
-            font-size: 0.9rem;
+
+        .status-value {
+            font-size: 0.85rem;
             font-weight: 500;
         }
-        .mode-badge {
-            background: rgba(0,217,255,0.2);
-            color: #00d9ff;
+
+        .status-badge {
             padding: 0.25rem 0.75rem;
+            background: rgba(0, 212, 255, 0.15);
+            border: 1px solid rgba(0, 212, 255, 0.3);
             border-radius: 20px;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
         }
-        .btn {
+
+        /* Reset Button */
+        .reset-btn {
             width: 100%;
-            background: rgba(255,107,107,0.2);
-            color: #ff6b6b;
-            border: 1px solid rgba(255,107,107,0.3);
-            padding: 0.75rem;
-            border-radius: 10px;
-            cursor: pointer;
+            padding: 1rem;
+            background: rgba(255, 68, 102, 0.1);
+            border: 1px solid rgba(255, 68, 102, 0.3);
+            border-radius: 12px;
+            color: var(--accent-red);
             font-size: 0.9rem;
             font-weight: 500;
+            cursor: pointer;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
         }
-        .btn:hover {
-            background: rgba(255,107,107,0.3);
+
+        .reset-btn:hover {
+            background: rgba(255, 68, 102, 0.2);
         }
-        .time-display {
-            font-size: 0.85rem;
-            color: #666;
+
+        .reset-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Fullscreen */
+        .fullscreen-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #000;
+            z-index: 1000;
+        }
+
+        .fullscreen-overlay.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fullscreen-overlay img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .fullscreen-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        /* Animations */
+        @keyframes countUp {
+            from { opacity: 0.5; transform: scale(1.1); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .count-updated {
+            animation: countUp 0.3s ease-out;
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 600px) {
+            .header {
+                padding: 0.5rem 1rem;
+            }
+
+            .logo-text h1 {
+                font-size: 1rem;
+            }
+
+            .logo-text span {
+                display: none;
+            }
+
+            .clock {
+                display: none;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .occupancy-card {
+                padding: 1.5rem;
+            }
+
+            .ring-container {
+                width: 140px;
+                height: 140px;
+            }
+
+            .ring-number {
+                font-size: 2.5rem;
+            }
+
+            .counter-value {
+                font-size: 2rem;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo">
-            <div class="logo-icon">📷</div>
-            <h1>Traffic Counter</h1>
-        </div>
-        <div class="header-right">
-            <div class="status-badge">
-                <span class="status-dot"></span>
-                <span>Live</span>
+    <div class="bg-gradient"></div>
+
+    <div class="app">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">📷</div>
+                <div class="logo-text">
+                    <h1>Traffic Counter</h1>
+                    <span>Real-time Analytics</span>
+                </div>
             </div>
-            <span class="time-display" id="clock"></span>
-            <a href="/config" class="nav-link">⚙️ Settings</a>
-        </div>
+            <div class="header-right">
+                <div class="live-badge">
+                    <span class="live-dot"></span>
+                    <span>LIVE</span>
+                </div>
+                <span class="clock" id="clock">--:--</span>
+                <a href="/config" class="settings-btn">
+                    <span>⚙️</span>
+                    <span>Ayarlar</span>
+                </a>
+            </div>
+        </header>
+
+        <main class="container">
+            <div class="main-grid">
+                <div class="video-section">
+                    <div class="video-container">
+                        <div class="mode-indicator" id="mode-indicator">PERSON</div>
+                        <img id="video-stream" src="/video_feed" alt="Live Stream">
+                        <div class="video-controls">
+                            <button class="video-btn" onclick="toggleFullscreen()" title="Tam Ekran">
+                                ⛶
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <span class="chart-title">📊 Sayım Geçmişi (Son 60 dk)</span>
+                            <div class="chart-legend">
+                                <div class="legend-item">
+                                    <span class="legend-dot in"></span>
+                                    <span>Giriş</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span class="legend-dot out"></span>
+                                    <span>Çıkış</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="historyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <aside class="sidebar">
+                    <div class="occupancy-card">
+                        <div class="occupancy-title">Anlık Doluluk</div>
+                        <div class="ring-container">
+                            <svg class="ring-svg" width="160" height="160" viewBox="0 0 160 160">
+                                <defs>
+                                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#00d4ff"/>
+                                        <stop offset="100%" stop-color="#00ff88"/>
+                                    </linearGradient>
+                                </defs>
+                                <circle class="ring-bg" cx="80" cy="80" r="65"/>
+                                <circle class="ring-progress" id="ring-progress" cx="80" cy="80" r="65"/>
+                            </svg>
+                            <div class="ring-value">
+                                <div class="ring-number" id="occupancy">0</div>
+                                <div class="ring-label">kişi içeride</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="counter-row">
+                        <div class="counter-card in">
+                            <div class="counter-icon">↙️</div>
+                            <div class="counter-value" id="count-in">0</div>
+                            <div class="counter-label">Giriş</div>
+                        </div>
+                        <div class="counter-card out">
+                            <div class="counter-icon">↗️</div>
+                            <div class="counter-value" id="count-out">0</div>
+                            <div class="counter-label">Çıkış</div>
+                        </div>
+                    </div>
+
+                    <div class="status-card">
+                        <div class="status-row">
+                            <span class="status-label">Mod</span>
+                            <span class="status-badge" id="mode">PERSON</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Yön</span>
+                            <span class="status-value" id="direction">Normal</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Aktif</span>
+                            <span class="status-value" id="uptime">--:--:--</span>
+                        </div>
+                    </div>
+
+                    <button class="reset-btn" onclick="resetCounters()">
+                        <span>🔄</span>
+                        <span>Sayaçları Sıfırla</span>
+                    </button>
+                </aside>
+            </div>
+        </main>
     </div>
 
-    <div class="container">
-        <div class="main-grid">
-            <div class="video-container">
-                <img src="/video_feed" alt="Live Stream">
-            </div>
-
-            <div class="sidebar">
-                <div class="card occupancy-card">
-                    <div class="card-header">Current Occupancy</div>
-                    <div class="occupancy-value" id="occupancy">0</div>
-                    <div class="occupancy-label">people inside</div>
-                </div>
-
-                <div class="counter-row">
-                    <div class="card counter-card in">
-                        <div class="counter-value" id="count-in">0</div>
-                        <div class="counter-label">Entered</div>
-                    </div>
-                    <div class="card counter-card out">
-                        <div class="counter-value" id="count-out">0</div>
-                        <div class="counter-label">Exited</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">Status</div>
-                    <div class="info-row">
-                        <span class="info-label">Mode</span>
-                        <span class="mode-badge" id="mode">PERSON</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Direction</span>
-                        <span class="info-value" id="direction">Normal</span>
-                    </div>
-                </div>
-
-                <button class="btn" onclick="resetCounters()">Reset Counters</button>
-            </div>
-        </div>
+    <!-- Fullscreen Overlay -->
+    <div class="fullscreen-overlay" id="fullscreen-overlay">
+        <button class="fullscreen-close" onclick="closeFullscreen()">✕</button>
+        <img src="/video_feed" alt="Live Stream Fullscreen">
     </div>
 
     <script>
+        // State
+        let lastCountIn = 0;
+        let lastCountOut = 0;
+        let startTime = Date.now();
+        let historyData = { labels: [], in: [], out: [] };
+        let chart = null;
+
+        // Ring animation
+        const circumference = 2 * Math.PI * 65; // 408
+
+        function updateRing(occupancy) {
+            const maxOccupancy = 100; // Adjust based on your space
+            const percentage = Math.min(occupancy / maxOccupancy, 1);
+            const offset = circumference - (percentage * circumference);
+            document.getElementById('ring-progress').style.strokeDashoffset = offset;
+        }
+
+        // Clock
         function updateClock() {
             const now = new Date();
             document.getElementById('clock').textContent =
-                now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            // Uptime
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const hours = Math.floor(elapsed / 3600).toString().padStart(2, '0');
+            const minutes = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
+            const seconds = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('uptime').textContent = `${hours}:${minutes}:${seconds}`;
         }
 
+        // Chart initialization
+        function initChart() {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: historyData.labels,
+                    datasets: [
+                        {
+                            label: 'Giriş',
+                            data: historyData.in,
+                            borderColor: '#00ff88',
+                            backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'Çıkış',
+                            data: historyData.out,
+                            borderColor: '#ff4466',
+                            backgroundColor: 'rgba(255, 68, 102, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            display: false
+                        },
+                        y: {
+                            display: true,
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
+                            ticks: {
+                                color: '#666',
+                                font: { size: 10 },
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateHistoryChart(countIn, countOut) {
+            const now = new Date();
+            const label = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
+            historyData.labels.push(label);
+            historyData.in.push(countIn);
+            historyData.out.push(countOut);
+
+            // Keep last 60 data points (1 hour if updating every minute)
+            if (historyData.labels.length > 60) {
+                historyData.labels.shift();
+                historyData.in.shift();
+                historyData.out.shift();
+            }
+
+            if (chart) {
+                chart.update('none');
+            }
+        }
+
+        // Fetch data
         async function fetchData() {
             try {
                 const res = await fetch('/api/data');
@@ -293,31 +824,90 @@
 
                 const countIn = data.counts.in;
                 const countOut = data.counts.out;
+                const occupancy = Math.max(0, countIn - countOut);
 
-                document.getElementById('count-in').textContent = countIn;
-                document.getElementById('count-out').textContent = countOut;
-                document.getElementById('occupancy').textContent = Math.max(0, countIn - countOut);
+                // Update counters with animation
+                const inEl = document.getElementById('count-in');
+                const outEl = document.getElementById('count-out');
+                const occEl = document.getElementById('occupancy');
+
+                if (countIn !== lastCountIn) {
+                    inEl.textContent = countIn;
+                    inEl.classList.remove('count-updated');
+                    void inEl.offsetWidth; // Trigger reflow
+                    inEl.classList.add('count-updated');
+                    lastCountIn = countIn;
+                }
+
+                if (countOut !== lastCountOut) {
+                    outEl.textContent = countOut;
+                    outEl.classList.remove('count-updated');
+                    void outEl.offsetWidth;
+                    outEl.classList.add('count-updated');
+                    lastCountOut = countOut;
+                }
+
+                occEl.textContent = occupancy;
+                updateRing(occupancy);
+
+                // Update status
                 document.getElementById('mode').textContent = data.mode.toUpperCase();
-                document.getElementById('direction').textContent = data.flip_direction ? 'Flipped' : 'Normal';
+                document.getElementById('mode-indicator').textContent = data.mode.toUpperCase();
+                document.getElementById('direction').textContent = data.flip_direction ? 'Ters' : 'Normal';
+
+                // Update ring label based on mode
+                document.querySelector('.ring-label').textContent =
+                    data.mode === 'person' ? 'kişi içeride' : 'araç içeride';
+
             } catch (e) {
-                console.error('Failed to fetch data:', e);
+                console.error('Veri çekme hatası:', e);
             }
         }
 
+        // Reset counters
         async function resetCounters() {
-            if (!confirm('Reset all counters to zero?')) return;
+            if (!confirm('Tüm sayaçları sıfırlamak istediğinize emin misiniz?')) return;
             try {
                 await fetch('/api/reset', { method: 'POST' });
                 fetchData();
+                // Reset chart
+                historyData = { labels: [], in: [], out: [] };
+                if (chart) chart.update();
             } catch (e) {
-                console.error('Failed to reset:', e);
+                console.error('Sıfırlama hatası:', e);
             }
         }
 
+        // Fullscreen
+        function toggleFullscreen() {
+            document.getElementById('fullscreen-overlay').classList.add('active');
+        }
+
+        function closeFullscreen() {
+            document.getElementById('fullscreen-overlay').classList.remove('active');
+        }
+
+        // ESC key to close fullscreen
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeFullscreen();
+        });
+
+        // Initialize
         updateClock();
         setInterval(updateClock, 1000);
         fetchData();
         setInterval(fetchData, 1000);
+
+        // Initialize chart
+        initChart();
+        // Update chart every 30 seconds
+        setInterval(() => {
+            fetchData().then(() => {
+                updateHistoryChart(lastCountIn, lastCountOut);
+            });
+        }, 30000);
+        // Initial chart point
+        setTimeout(() => updateHistoryChart(lastCountIn, lastCountOut), 2000);
     </script>
 </body>
 </html>
