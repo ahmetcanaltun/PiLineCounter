@@ -3,10 +3,13 @@ Flask Web Application - Traffic Counting Edge Device
 Provides web interface for live streaming and configuration.
 """
 
+import argparse
 from flask import Flask, render_template, Response, jsonify, request
-from camera_processor import processor
+from camera_processor import CameraProcessor
 
 app = Flask(__name__)
+processor = None
+args = None
 
 
 def generate_frames():
@@ -83,7 +86,33 @@ def api_roi():
     return jsonify({'status': 'ok', 'data': processor.get_data()})
 
 
+@app.route('/monitor')
+def monitor():
+    """JSON interval monitor page."""
+    if not args.monitor:
+        return 'Monitor mode not enabled. Start with --monitor flag.', 403
+    return render_template('monitor.html')
+
+
+@app.route('/api/records')
+def api_records():
+    """Get latest interval records."""
+    return jsonify(processor.get_latest_records())
+
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Traffic Counter')
+    parser.add_argument('--video', type=str, default=None,
+                        help='Video file path (default: live camera)')
+    parser.add_argument('--monitor', action='store_true',
+                        help='Enable JSON monitor at /monitor')
+    parser.add_argument('--interval', type=float, default=5.0,
+                        help='Interval seconds for JSON records (default: 5)')
+    args = parser.parse_args()
+
+    processor = CameraProcessor(resolution=(854, 480), framerate=30,
+                                 video_path=args.video,
+                                 interval_seconds=args.interval)
     processor.start()
     try:
         app.run(host='0.0.0.0', port=5000, threaded=True, debug=False)
