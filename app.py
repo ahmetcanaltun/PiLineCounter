@@ -11,11 +11,14 @@ app = Flask(__name__)
 
 def generate_frames():
     """Generator for MJPEG streaming."""
+    import time
     while True:
         frame = processor.get_frame()
         if frame is not None:
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        else:
+            time.sleep(0.01)
 
 
 @app.route('/')

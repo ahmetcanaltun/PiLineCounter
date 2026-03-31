@@ -308,9 +308,9 @@ class CameraProcessor:
                             self._count_in += 1
                         else:
                             self._count_out += 1
-                        self._save_config()
 
                     self._counted_ids.add(track_id)
+                    self._save_config()
                     print(f"[COUNT] {self.CLASS_NAMES.get(cls, 'obj')} #{track_id} -> {direction.upper()} | Total: IN={self._count_in}, OUT={self._count_out}")
 
             # Draw bounding box (cyan for active, green for counted)
