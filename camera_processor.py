@@ -191,7 +191,7 @@ class CameraProcessor:
 
     def _capture_frame(self):
         """Capture a frame from the camera."""
-        if PI_CAMERA_AVAILABLE and self._camera:
+        if PI_CAMERA_AVAILABLE and self._camera and not self.video_path:
             frame = self._camera.capture_array("main")
             # Swap R and B channels
             return frame[:, :, ::-1].copy()
