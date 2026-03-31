@@ -48,9 +48,11 @@ class CameraProcessor:
         7: 'truck'
     }
 
-    def __init__(self, resolution=(640, 480), framerate=30):
+    def __init__(self, resolution=(640, 480), framerate=30, video_path=None, interval_seconds=5):
         self.resolution = resolution
         self.framerate = framerate
+        self.video_path = video_path
+        self.interval_seconds = interval_seconds
 
         # Thread control
         self._running = False
@@ -89,6 +91,13 @@ class CameraProcessor:
         # FPS tracking
         self._fps = 0
         self._frame_times = []
+
+        # Interval JSON records
+        self._interval_in = 0
+        self._interval_out = 0
+        self._interval_start_time = None
+        self._interval_records = []
+        self._interval_lock = threading.Lock()
 
         # Load saved configuration
         self._load_config()
@@ -137,8 +146,18 @@ class CameraProcessor:
         return self.PERSON_CLASSES
 
     def _init_camera(self):
-        """Initialize camera - Picamera2 on Pi, OpenCV fallback, or test mode."""
-        if PI_CAMERA_AVAILABLE:
+        """Initialize camera - video file, Picamera2 on Pi, OpenCV fallback, or test mode."""
+        if self.video_path:
+            self._camera = cv2.VideoCapture(self.video_path)
+            if self._camera.isOpened():
+                self._test_mode = False
+                print(f"[INFO] Video file opened: {self.video_path}")
+            else:
+                self._camera = None
+                self._test_mode = True
+                self._test_frame_count = 0
+                print(f"[WARN] Could not open video file: {self.video_path} - TEST MODE")
+        elif PI_CAMERA_AVAILABLE:
             self._camera = Picamera2()
             config = self._camera.create_preview_configuration(
                 main={"size": self.resolution, "format": "BGR888"},
@@ -311,6 +330,12 @@ class CameraProcessor:
 
                     self._counted_ids.add(track_id)
                     self._save_config()
+
+                    with self._interval_lock:
+                        if direction == 'in':
+                            self._interval_in += 1
+                        else:
+                            self._interval_out += 1
                     print(f"[COUNT] {self.CLASS_NAMES.get(cls, 'obj')} #{track_id} -> {direction.upper()} | Total: IN={self._count_in}, OUT={self._count_out}")
 
             # Draw bounding box (cyan for active, green for counted)
@@ -399,6 +424,30 @@ class CameraProcessor:
             cv2.putText(frame, "OUT", (out_x - 12, out_y - 8),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (100, 100, 255), 1)
 
+    def _check_interval(self):
+        """Emit a JSON interval record if enough time has passed."""
+        now = time.time()
+        if self._interval_start_time is None:
+            self._interval_start_time = now
+            return
+
+        if now - self._interval_start_time >= self.interval_seconds:
+            from datetime import datetime
+            with self._interval_lock:
+                record = {
+                    'from': datetime.fromtimestamp(self._interval_start_time).strftime('%Y-%m-%dT%H:%M:%S'),
+                    'to': datetime.fromtimestamp(now).strftime('%Y-%m-%dT%H:%M:%S'),
+                    'in': self._interval_in,
+                    'out': self._interval_out,
+                }
+                self._interval_in = 0
+                self._interval_out = 0
+                self._interval_start_time = now
+                self._interval_records.append(record)
+                if len(self._interval_records) > 200:
+                    self._interval_records.pop(0)
+            print(f"[INTERVAL] {record}")
+
     def _run(self):
         """Main processing loop - runs in daemon thread."""
         self._init_camera()
@@ -412,6 +461,7 @@ class CameraProcessor:
                 time.sleep(0.01)
                 continue
 
+            self._check_interval()
             processed = self._process_frame(frame)
 
             if processed is not None:
@@ -512,10 +562,15 @@ class CameraProcessor:
         roi_status = f"enabled={self._roi['enabled']}" if self._roi else "disabled"
         print(f"[INFO] ROI updated: {roi_status}")
 
+    def get_latest_records(self, n=50):
+        """Get last n interval records (thread-safe)."""
+        with self._interval_lock:
+            return list(self._interval_records[-n:])
+
     def get_resolution(self):
         """Get camera resolution."""
         return self.resolution
 
 
-# Singleton instance
+# Singleton instance - overridden by app.py with CLI args
 processor = CameraProcessor(resolution=(854, 480), framerate=30)
