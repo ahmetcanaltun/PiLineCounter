@@ -111,9 +111,10 @@ class CameraProcessor:
                     self._line = config.get('line', self._line)
                     self._mode = config.get('mode', 'person')
                     self._flip_direction = config.get('flip_direction', False)
-                    counts = config.get('counts', {})
-                    self._count_in = counts.get('in', 0)
-                    self._count_out = counts.get('out', 0)
+                    if not self.video_path:
+                        counts = config.get('counts', {})
+                        self._count_in = counts.get('in', 0)
+                        self._count_out = counts.get('out', 0)
                     # Load ROI config
                     self._roi = config.get('roi', None)
                     roi_status = f", roi={self._roi['enabled']}" if self._roi else ""
@@ -376,7 +377,7 @@ class CameraProcessor:
 
         # Semi-transparent background for counters (top-left)
         overlay = frame.copy()
-        cv2.rectangle(overlay, (4, 4), (95, 70), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (4, 4), (95, 60), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
 
         # FPS indicator
@@ -389,10 +390,6 @@ class CameraProcessor:
         cv2.putText(frame, f"OUT: {self._count_out}", (8, 55),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 100, 255), 1)
 
-        # Mode indicator
-        mode_text = "PERSON" if self._mode == 'person' else "VEHICLE"
-        cv2.putText(frame, mode_text, (8, 68),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.35, (200, 200, 200), 1)
 
         # Direction arrows near the line
         line_cx = (self._line[0] + self._line[2]) // 2
