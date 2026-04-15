@@ -198,6 +198,9 @@ class CameraProcessor:
         elif self._camera:
             ret, frame = self._camera.read()
             if not ret or frame is None:
+                if self.video_path:
+                    self._camera.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    self.reset_counts()
                 return None
             h, w = frame.shape[:2]
             if (w, h) != self.resolution:
