@@ -197,7 +197,12 @@ class CameraProcessor:
             return frame[:, :, ::-1].copy()
         elif self._camera:
             ret, frame = self._camera.read()
-            return frame if ret else None
+            if not ret or frame is None:
+                return None
+            h, w = frame.shape[:2]
+            if (w, h) != self.resolution:
+                frame = cv2.resize(frame, self.resolution)
+            return frame
         return None
 
     def _ccw(self, A, B, C):
