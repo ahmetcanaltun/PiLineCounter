@@ -111,10 +111,6 @@ class CameraProcessor:
                     self._line = config.get('line', self._line)
                     self._mode = config.get('mode', 'person')
                     self._flip_direction = config.get('flip_direction', False)
-                    if not self.video_path:
-                        counts = config.get('counts', {})
-                        self._count_in = counts.get('in', 0)
-                        self._count_out = counts.get('out', 0)
                     # Load ROI config
                     self._roi = config.get('roi', None)
                     roi_status = f", roi={self._roi['enabled']}" if self._roi else ""
