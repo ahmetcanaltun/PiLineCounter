@@ -152,7 +152,6 @@ class CameraProcessor:
             else:
                 self._camera = None
                 self._test_mode = True
-                self._test_frame_count = 0
                 print(f"[WARN] Could not open video file: {self.video_path} - TEST MODE")
         elif PI_CAMERA_AVAILABLE:
             self._camera = Picamera2()
@@ -175,7 +174,6 @@ class CameraProcessor:
             else:
                 self._camera = None
                 self._test_mode = True
-                self._test_frame_count = 0
                 print(f"[INFO] No camera found - running in TEST MODE")
 
     def _init_model(self):
