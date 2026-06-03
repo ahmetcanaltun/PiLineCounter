@@ -1,14 +1,16 @@
 # Traffic Counting Edge Device
 
-Real-time traffic/people counting system for Raspberry Pi 5 with Camera Module v3. Uses YOLOv8 + ByteTrack for detection and tracking with a web-based admin panel.
+Real-time traffic/people counting system for Raspberry Pi 5 with Camera Module v3. Uses YOLOv11n (NCNN optimized) + ByteTrack for detection and tracking with a web-based interface. Achieves ~10 FPS on Raspberry Pi 5.
 
 ## Features
 
-- **Real-time Detection**: YOLOv8n with ByteTrack multi-object tracking
+- **Real-time Detection**: YOLOv11n NCNN with ByteTrack multi-object tracking
 - **Dual Mode**: Person counting (libraries, retail) or Vehicle counting (parking, traffic)
 - **Virtual Line Crossing**: Configurable counting line with IN/OUT direction detection
-- **Web Dashboard**: Live MJPEG stream with real-time counters
-- **Drag & Drop Config**: Interactive line positioning on live video
+- **ROI Support**: Optional Region of Interest to restrict detection area
+- **Web Interface**: Live MJPEG stream, interactive config, and interval monitor
+- **Drag & Drop Config**: Interactive line/ROI positioning on live video
+- **Interval Recording**: Periodic IN/OUT snapshots (configurable interval)
 - **Persistent Storage**: Configuration and counts survive reboots
 
 ## Hardware Requirements
@@ -40,7 +42,13 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Verify Camera
+### 4. Export YOLO Model to NCNN
+
+```bash
+python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='ncnn')"
+```
+
+### 5. Verify Camera
 
 ```bash
 libcamera-hello --list-cameras
@@ -51,17 +59,36 @@ libcamera-hello --list-cameras
 ### Start the Server
 
 ```bash
+# Live camera
 python app.py
+
+# Video file
+python app.py --video /path/to/video.mp4
+
+# With interval monitor (default: 5s interval)
+python app.py --monitor
+
+# Custom interval
+python app.py --monitor --interval 10
 ```
 
 Access the web interface at `http://<pi-ip>:5000`
+
+### CLI Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--video PATH` | — | Use video file instead of camera |
+| `--monitor` | off | Enable interval monitor at `/monitor` |
+| `--interval N` | 5 | Interval seconds for JSON records |
 
 ### Pages
 
 | URL | Description |
 |-----|-------------|
-| `/` | Dashboard - Live stream with IN/OUT counters |
-| `/config` | Configuration - Drag endpoints to position counting line |
+| `/` | Dashboard — live stream |
+| `/config` | Configuration — line editor, ROI, mode, direction |
+| `/monitor` | Interval monitor (requires `--monitor`) |
 
 ## API Reference
 
@@ -72,19 +99,31 @@ Returns current state.
 ```json
 {
   "counts": {"in": 42, "out": 38},
-  "line": [0, 240, 640, 240],
-  "mode": "person"
+  "line": [427, 0, 427, 480],
+  "mode": "person",
+  "flip_direction": false,
+  "roi": {"enabled": false, "x": 0, "y": 0, "width": 854, "height": 480}
 }
 ```
 
 ### POST `/api/config`
 
-Update line coordinates and/or detection mode.
+Update line coordinates, detection mode, and/or direction.
 
 ```bash
 curl -X POST http://localhost:5000/api/config \
   -H "Content-Type: application/json" \
-  -d '{"line": [100, 200, 540, 200], "mode": "vehicle"}'
+  -d '{"line": [427, 0, 427, 480], "mode": "person", "flip_direction": false}'
+```
+
+### POST `/api/roi`
+
+Update Region of Interest.
+
+```bash
+curl -X POST http://localhost:5000/api/roi \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "x": 100, "y": 50, "width": 600, "height": 380}'
 ```
 
 ### POST `/api/reset`
@@ -95,38 +134,40 @@ Reset counters to zero.
 curl -X POST http://localhost:5000/api/reset
 ```
 
-### GET `/video_feed`
+### GET `/api/records`
 
-MJPEG video stream. Embed in HTML:
+Get last 50 interval records (requires `--monitor`).
 
-```html
-<img src="http://<pi-ip>:5000/video_feed">
+```json
+[
+  {"from": "2026-04-01T14:23:00", "to": "2026-04-01T14:23:05", "in": 3, "out": 1},
+  ...
+]
 ```
 
 ## Configuration
 
-Settings are stored in `config.json`:
+Settings are stored in `config.json` (auto-created, gitignored). See `config.json.example` for structure.
 
 ```json
 {
-  "line": [0, 240, 640, 240],
+  "line": [427, 0, 427, 480],
   "mode": "person",
-  "counts": {"in": 0, "out": 0}
+  "flip_direction": false
 }
 ```
 
 | Field | Description |
 |-------|-------------|
 | `line` | Virtual line coordinates `[x1, y1, x2, y2]` |
-| `mode` | `"person"` (class 0) or `"vehicle"` (classes 2,3,5,7) |
-| `counts` | Persistent IN/OUT counters |
+| `mode` | `"person"` (class 0) or `"vehicle"` (classes 2, 3, 5, 7) |
+| `flip_direction` | Swap IN/OUT assignment |
 
 ## Counting Logic
 
-- **Reference Point**: Bottom-center of bounding box (foot position)
+- **Reference Point**: Bottom-center of bounding box (foot/wheel position)
 - **Direction Detection**: Vector cross-product relative to line direction
-- **IN**: Objects crossing right-to-left (relative to line vector)
-- **OUT**: Objects crossing left-to-right
+- **flip_direction**: Swaps which side counts as IN vs OUT
 
 ## Run as Service
 
@@ -168,27 +209,31 @@ sudo systemctl start traffic-counter
 journalctl -u traffic-counter -f
 ```
 
+Or use the desktop launcher: `bash start.sh`
+
 ## Project Structure
 
 ```
 camera_module/
-├── app.py                 # Flask web server
+├── app.py                 # Flask web server & API
 ├── camera_processor.py    # Camera + AI processing thread
-├── config.json            # Persistent configuration
+├── config.json.example    # Config template
 ├── requirements.txt       # Python dependencies
+├── start.sh               # Pi desktop launcher
 ├── README.md
 └── templates/
-    ├── index.html         # Dashboard page
-    └── config.html        # Configuration page
+    ├── index.html         # Dashboard (live stream)
+    ├── config.html        # Configuration UI
+    └── monitor.html       # Interval monitor
 ```
 
 ## Performance
 
 | Metric | Value |
 |--------|-------|
-| Resolution | 640x480 |
-| Frame Rate | ~15-20 FPS (with inference) |
-| Model | YOLOv8n (nano) |
+| Resolution | 854x480 |
+| Frame Rate | ~10 FPS (with NCNN inference) |
+| Model | YOLOv11n NCNN |
 | Tracker | ByteTrack |
 
 ## Troubleshooting
@@ -206,16 +251,17 @@ sudo nano /boot/firmware/config.txt
 
 ### Low frame rate
 
+- Ensure NCNN model is used (`yolo11n_ncnn_model/` folder must exist)
+- Re-export if missing: `python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='ncnn')"`
 - Reduce resolution in `camera_processor.py`
-- Use `yolov8n.pt` (nano) instead of larger models
 - Ensure adequate cooling for Pi 5
 
-### Model download fails
+### Model not found
 
 ```bash
-# Manually download YOLOv8n
-pip install ultralytics
-yolo export model=yolov8n.pt format=onnx
+# Export YOLOv11n to NCNN format
+python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='ncnn')"
+# This creates yolo11n_ncnn_model/ directory
 ```
 
 ## License
