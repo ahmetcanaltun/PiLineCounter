@@ -1,5 +1,5 @@
 # Runtime config
-# config.json
+config.json
 
 # Python
 __pycache__/
@@ -12,7 +12,18 @@ venv/
 
 # macOS
 .DS_Store
-config.json.example
+
+# Media / test files
+*.mov
+*.mp4
+*.jpg
+*.jpeg
+*.tmp
+
+# Demo / mockup files
+demo/
+dashboard.html
+mock_dashboard.html
 
 # Local notes and documents
 *.docx
