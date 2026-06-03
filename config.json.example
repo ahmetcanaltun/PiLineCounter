@@ -2,6 +2,7 @@
   "line": [427, 0, 427, 480],
   "mode": "person",
   "flip_direction": false,
+  "roi": null,
   "counts": {
     "in": 0,
     "out": 0

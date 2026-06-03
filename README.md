@@ -153,7 +153,9 @@ Settings are stored in `config.json` (auto-created, gitignored). See `config.jso
 {
   "line": [427, 0, 427, 480],
   "mode": "person",
-  "flip_direction": false
+  "flip_direction": false,
+  "roi": null,
+  "counts": {"in": 0, "out": 0}
 }
 ```
 
@@ -162,6 +164,8 @@ Settings are stored in `config.json` (auto-created, gitignored). See `config.jso
 | `line` | Virtual line coordinates `[x1, y1, x2, y2]` |
 | `mode` | `"person"` (class 0) or `"vehicle"` (classes 2, 3, 5, 7) |
 | `flip_direction` | Swap IN/OUT assignment |
+| `roi` | ROI dict `{enabled, x, y, width, height}` or `null` |
+| `counts` | Persistent IN/OUT counters (reset on startup) |
 
 ## Counting Logic
 
