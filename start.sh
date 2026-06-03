@@ -1,4 +1,4 @@
 #!/bin/bash
-cd /home/pi/camera_module
+cd "$(dirname "$0")"
 source venv/bin/activate
 python app.py --monitor
