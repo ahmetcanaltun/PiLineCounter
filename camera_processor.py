@@ -462,11 +462,12 @@ class CameraProcessor:
             return
         api_url = os.getenv("API_BASE_URL")
         token = os.getenv("DEVICE_TOKEN")
+        device_id = os.getenv("DEVICE_ID", "device-01")
         if not api_url or not token:
             return
         try:
             response = requests.post(
-                f"{api_url.rstrip('/')}/api/library/occupancy/push",
+                f"{api_url.rstrip('/')}/api/devices/{device_id}/events",
                 json={"in": record["in"], "out": record["out"]},
                 headers={"X-Device-Token": token},
                 timeout=5,

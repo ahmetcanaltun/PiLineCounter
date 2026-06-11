@@ -14,6 +14,7 @@ except ImportError:
 
 from flask import Flask, render_template, Response, jsonify, request
 from camera_processor import CameraProcessor
+from config_sync import ConfigSync
 
 app = Flask(__name__)
 processor = None
@@ -122,7 +123,13 @@ if __name__ == '__main__':
                                  video_path=args.video,
                                  interval_seconds=args.interval)
     processor.start()
+
+    # Backend config polling + snapshot upload daemon (outbound HTTPS only)
+    config_sync = ConfigSync(processor)
+    config_sync.start()
+
     try:
         app.run(host='0.0.0.0', port=5000, threaded=True, debug=False)
     finally:
+        config_sync.stop()
         processor.stop()
