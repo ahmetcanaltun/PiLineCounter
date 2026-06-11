@@ -4,6 +4,7 @@ High-performance camera capture and AI inference with mode-based filtering.
 Runs as a daemon thread to avoid blocking the Flask server.
 """
 
+import os
 import threading
 import time
 import json
@@ -26,6 +27,13 @@ try:
 except ImportError:
     YOLO_AVAILABLE = False
     print("[WARN] Ultralytics not available - detection disabled")
+
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    print("[WARN] requests not available - backend push disabled")
 
 
 class CameraProcessor:
@@ -446,6 +454,27 @@ class CameraProcessor:
                 if len(self._interval_records) > 200:
                     self._interval_records.pop(0)
             print(f"[INTERVAL] {record}")
+            self._push_to_backend(record)
+
+    def _push_to_backend(self, record):
+        """Send interval delta {in, out} to the main application. Fails silently."""
+        if not REQUESTS_AVAILABLE:
+            return
+        api_url = os.getenv("API_BASE_URL")
+        token = os.getenv("DEVICE_TOKEN")
+        if not api_url or not token:
+            return
+        try:
+            response = requests.post(
+                f"{api_url.rstrip('/')}/api/library/occupancy/push",
+                json={"in": record["in"], "out": record["out"]},
+                headers={"X-Device-Token": token},
+                timeout=5,
+            )
+            if response.status_code >= 400:
+                print(f"[WARN] Backend push returned {response.status_code}: {response.text[:200]}")
+        except Exception as exc:
+            print(f"[WARN] Backend push failed: {exc}")
 
     def _run(self):
         """Main processing loop - runs in daemon thread."""

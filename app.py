@@ -4,6 +4,14 @@ Provides web interface for live streaming and configuration.
 """
 
 import argparse
+
+# Load .env (API_BASE_URL, DEVICE_TOKEN) before camera_processor reads them
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from flask import Flask, render_template, Response, jsonify, request
 from camera_processor import CameraProcessor
 
