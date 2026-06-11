@@ -1,0 +1,21 @@
+[Unit]
+Description=Camera Module — Occupancy Backend doluluk push servisi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/camera_module
+EnvironmentFile=/home/pi/camera_module/.env
+ExecStart=/home/pi/camera_module/venv/bin/python -u /home/pi/camera_module/app.py
+Restart=on-failure
+RestartSec=5
+
+# Pi'da camera_module/config.json runtime'da değişir — yazma izni gerekir
+ProtectSystem=full
+ReadWritePaths=/home/pi/camera_module
+
+[Install]
+WantedBy=multi-user.target
