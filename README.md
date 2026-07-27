@@ -81,7 +81,7 @@ Access the web interface at `http://<pi-ip>:5000`
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--video PATH` | — | Use video file instead of camera |
-| `--monitor` | off | Enable interval monitor at `/monitor` |
+| `--monitor` | off | Show the interval records panel in the interface |
 | `--interval N` | 5 | Interval seconds for JSON records |
 
 ### Interface
