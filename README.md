@@ -2,6 +2,8 @@
 
 Real-time traffic/people counting system for Raspberry Pi 5 with Camera Module v3. Uses YOLOv11n (NCNN optimized) + ByteTrack for detection and tracking with a web-based interface. Achieves ~10 FPS on Raspberry Pi 5.
 
+Runs entirely on the device — no cloud service, no account, no internet connection required. Point it at a doorway or a road, draw a line in the browser, and it counts what crosses it.
+
 ## Features
 
 - **Real-time Detection**: YOLOv11n NCNN with ByteTrack multi-object tracking
@@ -173,45 +175,45 @@ Settings are stored in `config.json` (auto-created, gitignored). See `config.jso
 - **Direction Detection**: Vector cross-product relative to line direction
 - **flip_direction**: Swaps which side counts as IN vs OUT
 
-## Run as Service
+## Optional: Fleet Integration
 
-### Create systemd Service
+Everything above works offline. If you are running several devices and want them to
+report to a central backend, add a `.env` file — without it this whole layer stays
+switched off.
 
 ```bash
-sudo nano /etc/systemd/system/traffic-counter.service
+cp .env.example .env
 ```
 
 ```ini
-[Unit]
-Description=Traffic Counter
-After=network.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/camera_module
-Environment=PATH=/home/pi/camera_module/venv/bin
-ExecStart=/home/pi/camera_module/venv/bin/python app.py
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
+API_BASE_URL=https://your-backend.example.com
+DEVICE_ID=device-01
+DEVICE_TOKEN=<token issued by your backend>
 ```
 
-### Enable Service
+Once `API_BASE_URL` and `DEVICE_TOKEN` are set, two things activate:
+
+| Component | Behaviour |
+|-----------|-----------|
+| Occupancy push | POSTs each interval delta `{in, out}` to `/api/devices/<id>/events` |
+| Config sync | Polls `/api/devices/<id>/config` every 10s; applies remote line/mode/ROI changes and uploads a snapshot on request |
+
+Both fail silently — a backend outage never stalls counting. Traffic is outbound HTTPS
+only, so devices work behind NAT without inbound access.
+
+## Run as Service
+
+A ready-made systemd unit lives in [`deploy/`](deploy/):
 
 ```bash
+sudo cp deploy/camera_module.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable traffic-counter
-sudo systemctl start traffic-counter
+sudo systemctl enable --now camera_module
+journalctl -u camera_module -f
 ```
 
-### View Logs
-
-```bash
-journalctl -u traffic-counter -f
-```
+Adjust `User`, `Group` and the paths in the unit file if the project is not installed at
+`/home/pi/camera_module`. See [`deploy/README.md`](deploy/README.md) for details.
 
 Or use the desktop launcher: `bash start.sh`
 
@@ -221,12 +223,17 @@ Or use the desktop launcher: `bash start.sh`
 camera_module/
 ├── app.py                 # Flask web server & API
 ├── camera_processor.py    # Camera + AI processing thread
+├── config_sync.py         # Optional: remote config polling
 ├── config.json.example    # Config template
+├── .env.example           # Optional: fleet integration settings
 ├── requirements.txt       # Python dependencies
 ├── start.sh               # Pi desktop launcher
 ├── README.md
+├── deploy/
+│   ├── camera_module.service
+│   └── README.md          # systemd setup
 └── templates/
-    ├── index.html         # Dashboard (live stream)
+    ├── index.html         # Live view
     ├── config.html        # Configuration UI
     └── monitor.html       # Interval monitor
 ```
