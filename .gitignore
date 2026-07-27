@@ -20,11 +20,6 @@ venv/
 *.jpeg
 *.tmp
 
-# Demo / mockup files
-demo/
-dashboard.html
-mock_dashboard.html
-
 # Local notes and documents
 *.docx
 *.pdf
