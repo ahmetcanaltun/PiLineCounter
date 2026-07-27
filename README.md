@@ -1,5 +1,7 @@
 # Traffic Counting Edge Device
 
+[![CI](https://github.com/wakawakayashi/camera_module/actions/workflows/ci.yml/badge.svg)](https://github.com/wakawakayashi/camera_module/actions/workflows/ci.yml)
+
 Real-time traffic/people counting system for Raspberry Pi 5 with Camera Module v3. Uses YOLOv11n (NCNN optimized) + ByteTrack for detection and tracking with a web-based interface. Achieves ~10 FPS on Raspberry Pi 5.
 
 Runs entirely on the device — no cloud service, no account, no internet connection required. Point it at a doorway or a road, draw a line in the browser, and it counts what crosses it.
@@ -227,10 +229,32 @@ journalctl -u camera_module -f
 camera_module/
 ├── app.py                 # Flask server: routes, MJPEG stream, REST API
 ├── camera_processor.py    # Capture, inference, tracking and counting thread
+├── counting.py            # Line-crossing geometry (no OpenCV, fully tested)
 ├── index.html             # The entire web interface (no build step, no CDN)
 ├── requirements.txt
-└── README.md
+├── pyproject.toml         # pytest and ruff configuration
+└── tests/
+    ├── conftest.py        # Stubs the camera stack
+    ├── test_counting.py   # Crossing rules
+    └── test_api.py        # HTTP surface
 ```
+
+`counting.py` holds the rules that decide what counts as a crossing and in which
+direction. It deliberately imports nothing from OpenCV or the model runtime, so the
+logic can be read and tested on its own while `camera_processor.py` deals with frames.
+
+## Development
+
+```bash
+pip install pytest ruff
+pytest              # 37 tests, no camera or model required
+ruff check .        # lint
+ruff format .       # format
+```
+
+The test suite stubs OpenCV, ultralytics and picamera2 in `tests/conftest.py`, so it
+runs anywhere in under a second without the multi-gigabyte inference stack. CI runs the
+same three commands on Python 3.11, 3.12 and 3.13.
 
 ## Performance
 
