@@ -5,16 +5,8 @@ Provides web interface for live streaming and configuration.
 
 import argparse
 
-# Load .env (API_BASE_URL, DEVICE_TOKEN) before camera_processor reads them
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
-from flask import Flask, render_template, redirect, Response, jsonify, request
+from flask import Flask, redirect, send_from_directory, Response, jsonify, request
 from camera_processor import CameraProcessor
-from config_sync import ConfigSync
 
 app = Flask(__name__)
 processor = None
@@ -35,16 +27,8 @@ def generate_frames():
 
 @app.route('/')
 def index():
-    """Single-page interface: live view, counters, line/ROI editor."""
-    data = processor.get_data()
-    return render_template('app.html',
-                           line=data['line'],
-                           mode=data['mode'],
-                           flip_direction=data['flip_direction'],
-                           roi=data['roi'],
-                           resolution=list(processor.get_resolution()),
-                           monitor=bool(args and args.monitor),
-                           interval=args.interval if args else 5)
+    """The web interface - a static page that boots from /api/data."""
+    return send_from_directory(app.root_path, 'index.html')
 
 
 @app.route('/config')
@@ -63,8 +47,12 @@ def video_feed():
 
 @app.route('/api/data')
 def api_data():
-    """Get current counts, line, and mode."""
-    return jsonify(processor.get_data())
+    """Everything the interface needs: counts, line, mode, roi, fps, settings."""
+    return jsonify({
+        **processor.get_data(),
+        'monitor': bool(args and args.monitor),
+        'interval': args.interval if args else 5,
+    })
 
 
 @app.route('/api/reset', methods=['POST'])
@@ -117,12 +105,7 @@ if __name__ == '__main__':
                                  interval_seconds=args.interval)
     processor.start()
 
-    # Backend config polling + snapshot upload daemon (outbound HTTPS only)
-    config_sync = ConfigSync(processor)
-    config_sync.start()
-
     try:
         app.run(host='0.0.0.0', port=5000, threaded=True, debug=False)
     finally:
-        config_sync.stop()
         processor.stop()

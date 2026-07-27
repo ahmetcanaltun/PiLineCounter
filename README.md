@@ -112,9 +112,14 @@ Returns current state.
   "flip_direction": false,
   "roi": {"enabled": false, "x": 0, "y": 0, "width": 854, "height": 480},
   "fps": 9.8,
-  "resolution": [854, 480]
+  "resolution": [854, 480],
+  "monitor": false,
+  "interval": 5
 }
 ```
+
+The interface boots entirely from this endpoint — resolution, current line, mode and
+settings all come from here, so `index.html` needs no server-side templating.
 
 ### POST `/api/config`
 
@@ -157,7 +162,7 @@ Get last 50 interval records (requires `--monitor`).
 
 ## Configuration
 
-Settings are stored in `config.json` (auto-created, gitignored). See `config.json.example` for structure.
+Settings are stored in `config.json`, created automatically on first run and gitignored:
 
 ```json
 {
@@ -183,65 +188,48 @@ Settings are stored in `config.json` (auto-created, gitignored). See `config.jso
 - **Direction Detection**: Vector cross-product relative to line direction
 - **flip_direction**: Swaps which side counts as IN vs OUT
 
-## Optional: Fleet Integration
-
-Everything above works offline. If you are running several devices and want them to
-report to a central backend, add a `.env` file — without it this whole layer stays
-switched off.
-
-```bash
-cp .env.example .env
-```
-
-```ini
-API_BASE_URL=https://your-backend.example.com
-DEVICE_ID=device-01
-DEVICE_TOKEN=<token issued by your backend>
-```
-
-Once `API_BASE_URL` and `DEVICE_TOKEN` are set, two things activate:
-
-| Component | Behaviour |
-|-----------|-----------|
-| Occupancy push | POSTs each interval delta `{in, out}` to `/api/devices/<id>/events` |
-| Config sync | Polls `/api/devices/<id>/config` every 10s; applies remote line/mode/ROI changes and uploads a snapshot on request |
-
-Both fail silently — a backend outage never stalls counting. Traffic is outbound HTTPS
-only, so devices work behind NAT without inbound access.
-
 ## Run as Service
 
-A ready-made systemd unit lives in [`deploy/`](deploy/):
+To start the counter on boot, create `/etc/systemd/system/camera_module.service`:
+
+```ini
+[Unit]
+Description=Camera Module - people and vehicle counting service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/camera_module
+ExecStart=/home/pi/camera_module/venv/bin/python -u /home/pi/camera_module/app.py
+Restart=on-failure
+RestartSec=5
+
+# config.json is rewritten at runtime, so the app needs write access
+ProtectSystem=full
+ReadWritePaths=/home/pi/camera_module
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Adjust `User` and the paths if the project lives somewhere else, then:
 
 ```bash
-sudo cp deploy/camera_module.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now camera_module
 journalctl -u camera_module -f
 ```
 
-Adjust `User`, `Group` and the paths in the unit file if the project is not installed at
-`/home/pi/camera_module`. See [`deploy/README.md`](deploy/README.md) for details.
-
-Or use the desktop launcher: `bash start.sh`
-
 ## Project Structure
 
 ```
 camera_module/
-├── app.py                 # Flask web server & API
-├── camera_processor.py    # Camera + AI processing thread
-├── config_sync.py         # Optional: remote config polling
-├── config.json.example    # Config template
-├── .env.example           # Optional: fleet integration settings
-├── requirements.txt       # Python dependencies
-├── start.sh               # Pi desktop launcher
-├── README.md
-├── deploy/
-│   ├── camera_module.service
-│   └── README.md          # systemd setup
-└── templates/
-    └── app.html           # The entire web interface (no build step, no CDN)
+├── app.py                 # Flask server: routes, MJPEG stream, REST API
+├── camera_processor.py    # Capture, inference, tracking and counting thread
+├── index.html             # The entire web interface (no build step, no CDN)
+├── requirements.txt
+└── README.md
 ```
 
 ## Performance

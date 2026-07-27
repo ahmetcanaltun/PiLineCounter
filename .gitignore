@@ -1,9 +1,6 @@
 # Runtime config
 config.json
 
-# Environment file with secrets
-.env
-
 # Python
 __pycache__/
 *.py[cod]

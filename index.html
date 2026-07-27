@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Counter — {{ mode }}</title>
+<title>Counter</title>
 <style>
   :root {
     --bg: #0b0f14;
@@ -171,7 +171,7 @@
 <div class="app">
 
   <header>
-    <div class="brand">Counter<span>{{ resolution[0] }}×{{ resolution[1] }}</span></div>
+    <div class="brand">Counter<span id="res">—</span></div>
     <div class="stat"><span class="dot" id="dot"></span><b id="fps">—</b><i>fps</i></div>
     <div class="stat"><b id="hMode">—</b><i>mode</i></div>
   </header>
@@ -243,9 +243,8 @@
         <button class="btn wide danger" id="reset">Reset to zero</button>
       </div>
 
-      {% if monitor %}
-      <div class="card">
-        <h2>Interval records — {{ interval }}s</h2>
+      <div class="card" id="recCard" hidden>
+        <h2 id="recTitle">Interval records</h2>
         <div class="records">
           <table>
             <thead><tr><th>From</th><th>To</th><th>In</th><th>Out</th></tr></thead>
@@ -254,7 +253,6 @@
         </div>
         <div class="empty" id="recEmpty">Waiting for the first interval…</div>
       </div>
-      {% endif %}
     </aside>
   </main>
 </div>
@@ -264,18 +262,18 @@
 <script>
 "use strict";
 
-const NATIVE = {{ resolution | tojson }};
-const MONITOR = {{ monitor | tojson }};
+let NATIVE = [854, 480];      // replaced by the device's real resolution on boot
+let MONITOR = false;
 
 const $ = id => document.getElementById(id);
 const stage = $("stage"), canvas = $("canvas"), ctx = canvas.getContext("2d");
 const video = $("video");
 
 let state = {
-  line: {{ line | tojson }},
-  mode: {{ mode | tojson }},
-  flip: {{ flip_direction | tojson }},
-  roi: {{ roi | tojson }} || { enabled: false, x: 0, y: 0, width: NATIVE[0], height: NATIVE[1] }
+  line: [0, 0, 0, 0],
+  mode: "person",
+  flip: false,
+  roi: { enabled: false, x: 0, y: 0, width: 0, height: 0 }
 };
 
 let scale = 1;              // css px per native px
@@ -641,15 +639,39 @@ function toast(msg, isError) {
 }
 
 video.addEventListener("error", () => toast("Video stream interrupted", true));
-new ResizeObserver(fit).observe(stage);
 
-syncLineInputs();
-syncRoiInputs();
-syncMode();
-fit();
-poll();
-setInterval(poll, 1000);
-if (MONITOR) { pollRecords(); setInterval(pollRecords, 2000); }
+async function boot() {
+  let d;
+  try {
+    d = await (await fetch("/api/data")).json();
+  } catch {
+    $("dot").className = "dot stale";
+    return setTimeout(boot, 1500);   // device not up yet - keep trying
+  }
+
+  NATIVE = d.resolution || NATIVE;
+  MONITOR = !!d.monitor;
+  state.line = d.line;
+  state.mode = d.mode;
+  state.flip = d.flip_direction;
+  state.roi = d.roi || { enabled: false, x: 0, y: 0, width: NATIVE[0], height: NATIVE[1] };
+
+  $("res").textContent = NATIVE[0] + "×" + NATIVE[1];
+  stage.style.aspectRatio = NATIVE[0] + " / " + NATIVE[1];
+  $("recCard").hidden = !MONITOR;
+  $("recTitle").textContent = `Interval records — ${d.interval}s`;
+
+  syncLineInputs();
+  syncRoiInputs();
+  syncMode();
+  fit();
+  poll();
+  setInterval(poll, 1000);
+  if (MONITOR) { pollRecords(); setInterval(pollRecords, 2000); }
+}
+
+new ResizeObserver(fit).observe(stage);
+boot();
 </script>
 </body>
 </html>
