@@ -84,13 +84,19 @@ Access the web interface at `http://<pi-ip>:5000`
 | `--monitor` | off | Enable interval monitor at `/monitor` |
 | `--interval N` | 5 | Interval seconds for JSON records |
 
-### Pages
+### Interface
 
-| URL | Description |
-|-----|-------------|
-| `/` | Dashboard — live stream |
-| `/config` | Configuration — line editor, ROI, mode, direction |
-| `/monitor` | Interval monitor (requires `--monitor`) |
+The whole app lives on one page at `http://<pi-ip>:5000`:
+
+- **Live view** with the counting line and region of interest drawn on top of the stream
+- **Drag the line endpoints** directly on the video, or type exact pixel coordinates
+- **Counters** for in, out and net, updating once per second
+- **Detection controls** — people or vehicles, and a switch to swap which side counts as in
+- **Region of interest** — draw a box on the video to restrict detection and gain frame rate
+- **Interval records** table when started with `--monitor`
+
+Every change is applied and persisted immediately; there is no save button. `/config` and
+`/monitor` redirect to `/` and remain only so old bookmarks keep working.
 
 ## API Reference
 
@@ -104,7 +110,9 @@ Returns current state.
   "line": [427, 0, 427, 480],
   "mode": "person",
   "flip_direction": false,
-  "roi": {"enabled": false, "x": 0, "y": 0, "width": 854, "height": 480}
+  "roi": {"enabled": false, "x": 0, "y": 0, "width": 854, "height": 480},
+  "fps": 9.8,
+  "resolution": [854, 480]
 }
 ```
 
@@ -233,9 +241,7 @@ camera_module/
 │   ├── camera_module.service
 │   └── README.md          # systemd setup
 └── templates/
-    ├── index.html         # Live view
-    ├── config.html        # Configuration UI
-    └── monitor.html       # Interval monitor
+    └── app.html           # The entire web interface (no build step, no CDN)
 ```
 
 ## Performance

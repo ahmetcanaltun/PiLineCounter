@@ -12,7 +12,7 @@ try:
 except ImportError:
     pass
 
-from flask import Flask, render_template, Response, jsonify, request
+from flask import Flask, render_template, redirect, Response, jsonify, request
 from camera_processor import CameraProcessor
 from config_sync import ConfigSync
 
@@ -35,22 +35,23 @@ def generate_frames():
 
 @app.route('/')
 def index():
-    """Dashboard page with live stream and counters."""
-    return render_template('index.html')
+    """Single-page interface: live view, counters, line/ROI editor."""
+    data = processor.get_data()
+    return render_template('app.html',
+                           line=data['line'],
+                           mode=data['mode'],
+                           flip_direction=data['flip_direction'],
+                           roi=data['roi'],
+                           resolution=list(processor.get_resolution()),
+                           monitor=bool(args and args.monitor),
+                           interval=args.interval if args else 5)
 
 
 @app.route('/config')
-def config_page():
-    """Configuration page with interactive line editor."""
-    data = processor.get_data()
-    resolution = processor.get_resolution()
-    return render_template('config.html',
-                         line=data['line'],
-                         mode=data['mode'],
-                         flip_direction=data['flip_direction'],
-                         roi=data['roi'],
-                         width=resolution[0],
-                         height=resolution[1])
+@app.route('/monitor')
+def legacy_pages():
+    """The former separate pages are now panels of the main interface."""
+    return redirect('/')
 
 
 @app.route('/video_feed')
@@ -93,14 +94,6 @@ def api_roi():
     data = request.get_json()
     processor.update_roi(data)
     return jsonify({'status': 'ok', 'data': processor.get_data()})
-
-
-@app.route('/monitor')
-def monitor():
-    """JSON interval monitor page."""
-    if not args.monitor:
-        return 'Monitor mode not enabled. Start with --monitor flag.', 403
-    return render_template('monitor.html')
 
 
 @app.route('/api/records')

@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Counter — {{ mode }}</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #131a23;
+    --panel-2: #1a222d;
+    --line: #222d3a;
+    --text: #e6edf3;
+    --muted: #8b98a9;
+    --accent: #4f9cf9;
+    --in: #3fb950;
+    --out: #f0883e;
+    --danger: #f85149;
+    --radius: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- shell ---------- */
+  .app { display: flex; flex-direction: column; height: 100%; }
+
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .brand { font-weight: 650; letter-spacing: -0.01em; margin-right: auto; }
+  .brand span { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 13px; }
+
+  .stat { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+  .stat b { font-size: 15px; font-weight: 600; }
+  .stat i { font-style: normal; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.live { background: var(--in); box-shadow: 0 0 0 3px rgba(63,185,80,.15); }
+  .dot.stale { background: var(--danger); box-shadow: 0 0 0 3px rgba(248,81,73,.15); }
+
+  main {
+    flex: 1; display: grid; grid-template-columns: minmax(0,1fr) 340px;
+    gap: 16px; padding: 16px; overflow: auto; align-content: start;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0,1fr); } }
+
+  /* ---------- video stage ---------- */
+  .stage-wrap { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .stage {
+    position: relative; width: 100%; aspect-ratio: 854 / 480;
+    background: #000; border: 1px solid var(--line); border-radius: var(--radius);
+    overflow: hidden; touch-action: none;
+  }
+  .stage img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+  .stage.idle canvas { cursor: default; }
+
+  .badge {
+    position: absolute; top: 10px; left: 10px; z-index: 2;
+    background: rgba(11,15,20,.78); backdrop-filter: blur(6px);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 4px 9px; font-size: 12px; color: var(--muted);
+  }
+
+  .counters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .counter {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 14px 16px;
+  }
+  .counter .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .counter .value { font-size: 30px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .counter.in .value { color: var(--in); }
+  .counter.out .value { color: var(--out); }
+
+  /* ---------- sidebar ---------- */
+  aside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 14px 16px;
+  }
+  .card h2 {
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--muted); margin-bottom: 12px;
+  }
+  .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .row:last-child { margin-bottom: 0; }
+  .row label { flex: 1; color: var(--muted); }
+
+  .seg { display: flex; background: var(--panel-2); border-radius: 7px; padding: 3px; gap: 3px; }
+  .seg button {
+    flex: 1; border: 0; background: transparent; color: var(--muted);
+    padding: 6px 12px; border-radius: 5px; cursor: pointer;
+    font: inherit; font-size: 13px; transition: background .12s, color .12s;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .seg button:hover:not([aria-pressed="true"]) { color: var(--text); }
+
+  .switch {
+    position: relative; width: 40px; height: 22px; flex: none;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 11px; cursor: pointer; transition: background .15s;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--muted); transition: transform .15s, background .15s;
+  }
+  .switch[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+  .switch[aria-pressed="true"]::after { transform: translateX(18px); background: #fff; }
+
+  .coords { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .coords label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  input[type=number] {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+    color: var(--text); border-radius: 6px; padding: 6px 8px;
+    font: inherit; font-size: 13px; font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+  }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number]:focus { outline: none; border-color: var(--accent); }
+
+  .btn {
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+    border-radius: 7px; padding: 8px 12px; cursor: pointer;
+    font: inherit; font-size: 13px; transition: background .12s, border-color .12s;
+  }
+  .btn:hover { background: #222c39; }
+  .btn.wide { width: 100%; }
+  .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.danger { color: var(--danger); }
+  .btn.danger:hover { background: rgba(248,81,73,.12); border-color: var(--danger); }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row .btn { flex: 1; }
+
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.45; }
+
+  /* ---------- records ---------- */
+  .records { max-height: 260px; overflow: auto; margin: -4px -4px 0; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 8px; font-size: 12px; }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--panel); }
+  tbody tr { border-top: 1px solid var(--line); }
+  td.in { color: var(--in); }
+  td.out { color: var(--out); }
+  .empty { color: var(--muted); font-size: 12px; padding: 8px; }
+
+  /* ---------- toast ---------- */
+  #toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translate(-50%, 12px);
+    background: var(--panel-2); border: 1px solid var(--line);
+    padding: 9px 16px; border-radius: 8px; font-size: 13px;
+    opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4); z-index: 50;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.err { border-color: var(--danger); color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="brand">Counter<span>{{ resolution[0] }}×{{ resolution[1] }}</span></div>
+    <div class="stat"><span class="dot" id="dot"></span><b id="fps">—</b><i>fps</i></div>
+    <div class="stat"><b id="hMode">—</b><i>mode</i></div>
+  </header>
+
+  <main>
+    <div class="stage-wrap">
+      <div class="stage" id="stage">
+        <div class="badge" id="badge">Drag the endpoints to move the counting line</div>
+        <img id="video" src="/video_feed" alt="Live stream">
+        <canvas id="canvas"></canvas>
+      </div>
+
+      <div class="counters">
+        <div class="counter in"><div class="label">In</div><div class="value" id="cIn">0</div></div>
+        <div class="counter out"><div class="label">Out</div><div class="value" id="cOut">0</div></div>
+        <div class="counter"><div class="label">Net</div><div class="value" id="cNet">0</div></div>
+      </div>
+    </div>
+
+    <aside>
+      <div class="card">
+        <h2>Detection</h2>
+        <div class="row">
+          <label>Target</label>
+          <div class="seg" id="modeSeg">
+            <button data-mode="person" aria-pressed="false">People</button>
+            <button data-mode="vehicle" aria-pressed="false">Vehicles</button>
+          </div>
+        </div>
+        <div class="row">
+          <label for="flip">Swap in / out</label>
+          <button class="switch" id="flip" aria-pressed="false" aria-label="Swap in and out"></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Counting line</h2>
+        <div class="coords">
+          <div><label for="lx1">x1</label><input type="number" id="lx1"></div>
+          <div><label for="ly1">y1</label><input type="number" id="ly1"></div>
+          <div><label for="lx2">x2</label><input type="number" id="lx2"></div>
+          <div><label for="ly2">y2</label><input type="number" id="ly2"></div>
+        </div>
+        <div class="hint">Drag either endpoint on the video, or type exact pixel coordinates.</div>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn" id="centerV">Vertical</button>
+          <button class="btn" id="centerH">Horizontal</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Region of interest</h2>
+        <div class="row">
+          <label for="roiOn">Restrict detection</label>
+          <button class="switch" id="roiOn" aria-pressed="false" aria-label="Enable region of interest"></button>
+        </div>
+        <div class="coords">
+          <div><label for="rx">x</label><input type="number" id="rx"></div>
+          <div><label for="ry">y</label><input type="number" id="ry"></div>
+          <div><label for="rw">w</label><input type="number" id="rw"></div>
+          <div><label for="rh">h</label><input type="number" id="rh"></div>
+        </div>
+        <button class="btn wide" id="roiDraw" style="margin-top:12px">Draw on video</button>
+        <div class="hint">A smaller region means less to infer per frame, which raises the frame rate.</div>
+      </div>
+
+      <div class="card">
+        <h2>Counters</h2>
+        <button class="btn wide danger" id="reset">Reset to zero</button>
+      </div>
+
+      {% if monitor %}
+      <div class="card">
+        <h2>Interval records — {{ interval }}s</h2>
+        <div class="records">
+          <table>
+            <thead><tr><th>From</th><th>To</th><th>In</th><th>Out</th></tr></thead>
+            <tbody id="recBody"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="recEmpty">Waiting for the first interval…</div>
+      </div>
+      {% endif %}
+    </aside>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const NATIVE = {{ resolution | tojson }};
+const MONITOR = {{ monitor | tojson }};
+
+const $ = id => document.getElementById(id);
+const stage = $("stage"), canvas = $("canvas"), ctx = canvas.getContext("2d");
+const video = $("video");
+
+let state = {
+  line: {{ line | tojson }},
+  mode: {{ mode | tojson }},
+  flip: {{ flip_direction | tojson }},
+  roi: {{ roi | tojson }} || { enabled: false, x: 0, y: 0, width: NATIVE[0], height: NATIVE[1] }
+};
+
+let scale = 1;              // css px per native px
+let drag = null;            // {kind:'p1'|'p2'|'line'|'roi', ...}
+let roiDrawMode = false;
+let lastCounts = -1, staleTicks = 0;
+
+/* ---------------- geometry ---------------- */
+
+function fit() {
+  const r = stage.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(r.width * dpr);
+  canvas.height = Math.round(r.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  scale = r.width / NATIVE[0];
+  draw();
+}
+const toScreen = (x, y) => [x * scale, y * scale];
+const toNative = (x, y) => [
+  Math.max(0, Math.min(NATIVE[0], Math.round(x / scale))),
+  Math.max(0, Math.min(NATIVE[1], Math.round(y / scale)))
+];
+
+function pointerPos(e) {
+  const r = canvas.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+
+/* ---------------- rendering ---------------- */
+
+function draw() {
+  const w = canvas.width / (window.devicePixelRatio || 1);
+  const h = canvas.height / (window.devicePixelRatio || 1);
+  ctx.clearRect(0, 0, w, h);
+
+  // dim everything outside the ROI
+  if (state.roi.enabled) {
+    const [rx, ry] = toScreen(state.roi.x, state.roi.y);
+    const rw = state.roi.width * scale, rh = state.roi.height * scale;
+    ctx.fillStyle = "rgba(0,0,0,.45)";
+    ctx.beginPath();
+    ctx.rect(0, 0, w, h);
+    ctx.rect(rx, ry, rw, rh);
+    ctx.fill("evenodd");
+
+    ctx.strokeStyle = "#4f9cf9";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.strokeRect(rx, ry, rw, rh);
+    ctx.setLineDash([]);
+  }
+
+  const [x1, y1] = toScreen(state.line[0], state.line[1]);
+  const [x2, y2] = toScreen(state.line[2], state.line[3]);
+
+  // direction labels, perpendicular to the line
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  if (len > 1) {
+    const px = -dy / len, py = dx / len;      // this side counts as IN
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    const off = 26;
+    const inSide = state.flip ? -1 : 1;
+    label(mx + px * off * inSide, my + py * off * inSide, "IN", "#3fb950");
+    label(mx - px * off * inSide, my - py * off * inSide, "OUT", "#f0883e");
+  }
+
+  ctx.strokeStyle = "#e055c8";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  handle(x1, y1);
+  handle(x2, y2);
+}
+
+function handle(x, y) {
+  ctx.beginPath();
+  ctx.arc(x, y, 7, 0, Math.PI * 2);
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.strokeStyle = "#e055c8";
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+}
+
+function label(x, y, text, color) {
+  ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const w = ctx.measureText(text).width + 12;
+  ctx.fillStyle = "rgba(11,15,20,.8)";
+  ctx.beginPath();
+  ctx.roundRect(x - w / 2, y - 9, w, 18, 5);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+}
+
+/* ---------------- interaction ---------------- */
+
+canvas.addEventListener("pointerdown", e => {
+  const [mx, my] = pointerPos(e);
+  canvas.setPointerCapture(e.pointerId);
+
+  if (roiDrawMode) {
+    const [nx, ny] = toNative(mx, my);
+    drag = { kind: "roi", ox: nx, oy: ny };
+    return;
+  }
+
+  const [x1, y1] = toScreen(state.line[0], state.line[1]);
+  const [x2, y2] = toScreen(state.line[2], state.line[3]);
+  if (Math.hypot(mx - x1, my - y1) < 16) drag = { kind: "p1" };
+  else if (Math.hypot(mx - x2, my - y2) < 16) drag = { kind: "p2" };
+  else if (distToSegment(mx, my, x1, y1, x2, y2) < 12) {
+    const [nx, ny] = toNative(mx, my);
+    drag = { kind: "line", ox: nx, oy: ny, start: state.line.slice() };
+  }
+});
+
+canvas.addEventListener("pointermove", e => {
+  const [mx, my] = pointerPos(e);
+
+  if (!drag) {
+    const [x1, y1] = toScreen(state.line[0], state.line[1]);
+    const [x2, y2] = toScreen(state.line[2], state.line[3]);
+    const near = Math.hypot(mx - x1, my - y1) < 16 || Math.hypot(mx - x2, my - y2) < 16;
+    canvas.style.cursor = roiDrawMode ? "crosshair" : (near ? "grab" : "default");
+    return;
+  }
+
+  const [nx, ny] = toNative(mx, my);
+  if (drag.kind === "p1") { state.line[0] = nx; state.line[1] = ny; }
+  else if (drag.kind === "p2") { state.line[2] = nx; state.line[3] = ny; }
+  else if (drag.kind === "line") {
+    const ddx = nx - drag.ox, ddy = ny - drag.oy;
+    for (let i = 0; i < 4; i++) {
+      const lim = i % 2 === 0 ? NATIVE[0] : NATIVE[1];
+      state.line[i] = Math.max(0, Math.min(lim, drag.start[i] + (i % 2 === 0 ? ddx : ddy)));
+    }
+  } else if (drag.kind === "roi") {
+    state.roi = {
+      enabled: true,
+      x: Math.min(drag.ox, nx), y: Math.min(drag.oy, ny),
+      width: Math.abs(nx - drag.ox), height: Math.abs(ny - drag.oy)
+    };
+    syncRoiInputs();
+  }
+  draw();
+});
+
+canvas.addEventListener("pointerup", e => {
+  if (!drag) return;
+  canvas.releasePointerCapture(e.pointerId);
+  const kind = drag.kind;
+  drag = null;
+
+  if (kind === "roi") {
+    if (state.roi.width < 20 || state.roi.height < 20) {
+      toast("Region too small — drag a larger area", true);
+      state.roi.enabled = false;
+      syncRoiInputs();
+      draw();
+    } else {
+      setRoiDrawMode(false);
+      saveRoi();
+    }
+  } else {
+    syncLineInputs();
+    saveLine();
+  }
+});
+
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const l2 = dx * dx + dy * dy;
+  if (!l2) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+/* ---------------- api ---------------- */
+
+async function post(url, body) {
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch (err) {
+    toast("Could not reach the device", true);
+    throw err;
+  }
+}
+
+const saveLine = () => post("/api/config", {
+  line: state.line, mode: state.mode, flip_direction: state.flip
+}).then(() => toast("Line updated"));
+
+const saveDetection = () => post("/api/config", {
+  mode: state.mode, flip_direction: state.flip
+}).then(() => toast("Detection updated"));
+
+const saveRoi = () => post("/api/roi", state.roi)
+  .then(() => toast(state.roi.enabled ? "Region updated" : "Region cleared"));
+
+/* ---------------- controls ---------------- */
+
+function syncLineInputs() {
+  $("lx1").value = state.line[0]; $("ly1").value = state.line[1];
+  $("lx2").value = state.line[2]; $("ly2").value = state.line[3];
+}
+function syncRoiInputs() {
+  $("rx").value = state.roi.x; $("ry").value = state.roi.y;
+  $("rw").value = state.roi.width; $("rh").value = state.roi.height;
+  $("roiOn").setAttribute("aria-pressed", String(state.roi.enabled));
+}
+function syncMode() {
+  document.querySelectorAll("#modeSeg button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode)));
+  $("flip").setAttribute("aria-pressed", String(state.flip));
+  $("hMode").textContent = state.mode === "person" ? "people" : "vehicles";
+}
+
+["lx1", "ly1", "lx2", "ly2"].forEach((id, i) => {
+  $(id).addEventListener("change", () => {
+    const lim = i % 2 === 0 ? NATIVE[0] : NATIVE[1];
+    state.line[i] = Math.max(0, Math.min(lim, parseInt($(id).value, 10) || 0));
+    $(id).value = state.line[i];
+    draw();
+    saveLine();
+  });
+});
+
+[["rx", "x", 0], ["ry", "y", 1], ["rw", "width", 0], ["rh", "height", 1]].forEach(([id, key, axis]) => {
+  $(id).addEventListener("change", () => {
+    state.roi[key] = Math.max(0, Math.min(NATIVE[axis], parseInt($(id).value, 10) || 0));
+    $(id).value = state.roi[key];
+    draw();
+    saveRoi();
+  });
+});
+
+document.querySelectorAll("#modeSeg button").forEach(b =>
+  b.addEventListener("click", () => {
+    state.mode = b.dataset.mode;
+    syncMode();
+    saveDetection();
+  }));
+
+$("flip").addEventListener("click", () => {
+  state.flip = !state.flip;
+  syncMode();
+  draw();
+  saveDetection();
+});
+
+$("roiOn").addEventListener("click", () => {
+  state.roi.enabled = !state.roi.enabled;
+  if (state.roi.enabled && (!state.roi.width || !state.roi.height)) {
+    state.roi.x = 0; state.roi.y = 0;
+    state.roi.width = NATIVE[0]; state.roi.height = NATIVE[1];
+  }
+  syncRoiInputs();
+  draw();
+  saveRoi();
+});
+
+function setRoiDrawMode(on) {
+  roiDrawMode = on;
+  $("roiDraw").classList.toggle("active", on);
+  $("roiDraw").textContent = on ? "Cancel" : "Draw on video";
+  $("badge").textContent = on
+    ? "Drag across the video to set the region"
+    : "Drag the endpoints to move the counting line";
+  canvas.style.cursor = on ? "crosshair" : "default";
+}
+$("roiDraw").addEventListener("click", () => setRoiDrawMode(!roiDrawMode));
+
+$("centerV").addEventListener("click", () => {
+  state.line = [Math.round(NATIVE[0] / 2), 0, Math.round(NATIVE[0] / 2), NATIVE[1]];
+  syncLineInputs(); draw(); saveLine();
+});
+$("centerH").addEventListener("click", () => {
+  state.line = [0, Math.round(NATIVE[1] / 2), NATIVE[0], Math.round(NATIVE[1] / 2)];
+  syncLineInputs(); draw(); saveLine();
+});
+
+$("reset").addEventListener("click", async () => {
+  await post("/api/reset", {});
+  toast("Counters reset");
+  poll();
+});
+
+/* ---------------- polling ---------------- */
+
+async function poll() {
+  try {
+    const r = await fetch("/api/data");
+    const d = await r.json();
+
+    $("cIn").textContent = d.counts.in;
+    $("cOut").textContent = d.counts.out;
+    $("cNet").textContent = d.counts.in - d.counts.out;
+    $("fps").textContent = (d.fps ?? 0).toFixed(1);
+
+    // the stream is considered live while frames keep arriving
+    if (d.fps > 0.2) { staleTicks = 0; $("dot").className = "dot live"; }
+    else if (++staleTicks > 2) { $("dot").className = "dot stale"; }
+
+    if (!drag) {
+      state.mode = d.mode;
+      state.flip = d.flip_direction;
+      if (String(d.line) !== String(state.line)) {
+        state.line = d.line;
+        syncLineInputs();
+      }
+      if (d.roi) {
+        state.roi = d.roi;
+        syncRoiInputs();
+      }
+      syncMode();
+      draw();
+    }
+  } catch {
+    $("dot").className = "dot stale";
+    $("fps").textContent = "—";
+  }
+}
+
+async function pollRecords() {
+  try {
+    const rows = await (await fetch("/api/records")).json();
+    const body = $("recBody");
+    $("recEmpty").style.display = rows.length ? "none" : "";
+    body.innerHTML = rows.slice().reverse().map(r => `
+      <tr>
+        <td>${r.from.slice(11, 19)}</td>
+        <td>${r.to.slice(11, 19)}</td>
+        <td class="in">${r.in}</td>
+        <td class="out">${r.out}</td>
+      </tr>`).join("");
+  } catch { /* the panel simply stays as it was */ }
+}
+
+/* ---------------- misc ---------------- */
+
+let toastTimer;
+function toast(msg, isError) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "show" + (isError ? " err" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.className = ""), 1800);
+}
+
+video.addEventListener("error", () => toast("Video stream interrupted", true));
+new ResizeObserver(fit).observe(stage);
+
+syncLineInputs();
+syncRoiInputs();
+syncMode();
+fit();
+poll();
+setInterval(poll, 1000);
+if (MONITOR) { pollRecords(); setInterval(pollRecords, 2000); }
+</script>
+</body>
+</html>

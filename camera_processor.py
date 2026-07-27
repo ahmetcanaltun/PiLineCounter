@@ -544,7 +544,9 @@ class CameraProcessor:
                 'line': self._line.copy(),
                 'mode': self._mode,
                 'flip_direction': self._flip_direction,
-                'roi': self._roi.copy() if self._roi else None
+                'roi': self._roi.copy() if self._roi else None,
+                'fps': round(self._fps, 1),
+                'resolution': list(self.resolution)
             }
 
     def reset_counts(self):
