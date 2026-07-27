@@ -1,5 +1,5 @@
 [Unit]
-Description=Camera Module — Occupancy Backend doluluk push servisi
+Description=Camera Module - people and vehicle counting service
 After=network-online.target
 Wants=network-online.target
 
@@ -8,12 +8,13 @@ Type=simple
 User=pi
 Group=pi
 WorkingDirectory=/home/pi/camera_module
-EnvironmentFile=/home/pi/camera_module/.env
+# Optional - only needed for fleet integration
+EnvironmentFile=-/home/pi/camera_module/.env
 ExecStart=/home/pi/camera_module/venv/bin/python -u /home/pi/camera_module/app.py
 Restart=on-failure
 RestartSec=5
 
-# Pi'da camera_module/config.json runtime'da değişir — yazma izni gerekir
+# config.json is rewritten at runtime, so the app needs write access
 ProtectSystem=full
 ReadWritePaths=/home/pi/camera_module
 

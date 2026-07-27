@@ -1,8 +1,11 @@
 """
-Config sync daemon — Ana uygulamaya 10 saniyede bir polling yapar.
-- config_version değişmişse: line/mode/roi yeniden uygulanır, config.json güncellenir.
-- snapshot_requested=true ise: anlık JPEG capture edilip backend'e upload edilir.
-Pi outbound HTTPS yapar; backend Pi'a inbound erişim gerektirmez.
+Optional config sync daemon - polls a remote backend every 10 seconds.
+
+- When configVersion changes: line/mode/roi are re-applied and config.json is updated.
+- When snapshotRequested is true: a JPEG frame is captured and uploaded.
+
+The device only makes outbound HTTPS calls, so no inbound access is required.
+Disabled automatically unless API_BASE_URL and DEVICE_TOKEN are set.
 """
 
 import json
@@ -18,7 +21,7 @@ except ImportError:
     REQUESTS_AVAILABLE = False
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
-POLL_INTERVAL_DEFAULT = 10  # saniye
+POLL_INTERVAL_DEFAULT = 10  # seconds
 
 
 class ConfigSync(threading.Thread):
@@ -37,18 +40,18 @@ class ConfigSync(threading.Thread):
 
     def run(self):
         if not REQUESTS_AVAILABLE:
-            print("[CONFIG_SYNC] requests yüklü değil, daemon kapatıldı.")
+            print("[CONFIG_SYNC] requests not installed - sync disabled.")
             return
         if not (self.api_url and self.token):
-            print("[CONFIG_SYNC] API_BASE_URL veya DEVICE_TOKEN tanımlı değil, daemon kapatıldı.")
+            print("[CONFIG_SYNC] API_BASE_URL or DEVICE_TOKEN not set - sync disabled.")
             return
 
-        print(f"[CONFIG_SYNC] başlatıldı — {self.api_url} cihaz={self.device_id} aralık={self.interval}s")
+        print(f"[CONFIG_SYNC] started - {self.api_url} device={self.device_id} interval={self.interval}s")
         while not self._stop_event.is_set():
             try:
                 self._sync_once()
             except Exception as exc:
-                print(f"[CONFIG_SYNC] döngü hatası: {exc}")
+                print(f"[CONFIG_SYNC] loop error: {exc}")
             self._stop_event.wait(self.interval)
 
     def _sync_once(self):
@@ -78,7 +81,7 @@ class ConfigSync(threading.Thread):
         if roi:
             self.processor.update_roi(roi)
 
-        # Local config.json'a persist et (Pi reboot edince state korunur)
+        # Persist locally so the device keeps its settings across reboots
         try:
             payload = {
                 "line": line,
@@ -89,14 +92,14 @@ class ConfigSync(threading.Thread):
             }
             CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception as exc:
-            print(f"[CONFIG_SYNC] config.json yazılamadı: {exc}")
+            print(f"[CONFIG_SYNC] could not write config.json: {exc}")
 
-        print(f"[CONFIG_SYNC] config v{cfg.get('configVersion')} uygulandı: line={line} mode={mode} flip={flip}")
+        print(f"[CONFIG_SYNC] applied config v{cfg.get('configVersion')}: line={line} mode={mode} flip={flip}")
 
     def _upload_snapshot(self, headers):
         frame = self.processor.get_frame()
         if not frame:
-            print("[CONFIG_SYNC] snapshot için frame yok, atlanıyor")
+            print("[CONFIG_SYNC] no frame available, skipping snapshot")
             return
         url = f"{self.api_url}/api/devices/{self.device_id}/snapshot"
         try:
@@ -111,4 +114,4 @@ class ConfigSync(threading.Thread):
             else:
                 print(f"[CONFIG_SYNC] snapshot upload OK ({len(frame)} byte)")
         except Exception as exc:
-            print(f"[CONFIG_SYNC] snapshot upload hatası: {exc}")
+            print(f"[CONFIG_SYNC] snapshot upload error: {exc}")
