@@ -1,4 +1,4 @@
-# Line Counter
+# Line Counter Edge Device
 
 [![CI](https://github.com/wakawakayashi/line-counter/actions/workflows/ci.yml/badge.svg)](https://github.com/wakawakayashi/line-counter/actions/workflows/ci.yml)
 
