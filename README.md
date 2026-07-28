@@ -1,6 +1,6 @@
-# Traffic Counting Edge Device
+# Line Counter
 
-[![CI](https://github.com/wakawakayashi/camera_module/actions/workflows/ci.yml/badge.svg)](https://github.com/wakawakayashi/camera_module/actions/workflows/ci.yml)
+[![CI](https://github.com/wakawakayashi/line-counter/actions/workflows/ci.yml/badge.svg)](https://github.com/wakawakayashi/line-counter/actions/workflows/ci.yml)
 
 Real-time traffic/people counting system for Raspberry Pi 5 with Camera Module v3. Uses YOLOv11n (NCNN optimized) + ByteTrack for detection and tracking with a web-based interface. Achieves ~10 FPS on Raspberry Pi 5.
 
@@ -35,7 +35,7 @@ sudo apt install -y python3-pip python3-venv libcamera-dev
 ### 2. Create Virtual Environment
 
 ```bash
-cd ~/camera_module
+cd ~/line-counter
 python3 -m venv venv
 source venv/bin/activate
 ```
@@ -192,24 +192,24 @@ Settings are stored in `config.json`, created automatically on first run and git
 
 ## Run as Service
 
-To start the counter on boot, create `/etc/systemd/system/camera_module.service`:
+To start the counter on boot, create `/etc/systemd/system/line-counter.service`:
 
 ```ini
 [Unit]
-Description=Camera Module - people and vehicle counting service
+Description=Line Counter - people and vehicle counting service
 After=network.target
 
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/camera_module
-ExecStart=/home/pi/camera_module/venv/bin/python -u /home/pi/camera_module/app.py
+WorkingDirectory=/home/pi/line-counter
+ExecStart=/home/pi/line-counter/venv/bin/python -u /home/pi/line-counter/app.py
 Restart=on-failure
 RestartSec=5
 
 # config.json is rewritten at runtime, so the app needs write access
 ProtectSystem=full
-ReadWritePaths=/home/pi/camera_module
+ReadWritePaths=/home/pi/line-counter
 
 [Install]
 WantedBy=multi-user.target
@@ -219,14 +219,14 @@ Adjust `User` and the paths if the project lives somewhere else, then:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now camera_module
-journalctl -u camera_module -f
+sudo systemctl enable --now line-counter
+journalctl -u line-counter -f
 ```
 
 ## Project Structure
 
 ```
-camera_module/
+line-counter/
 ├── app.py                 # Flask server: routes, MJPEG stream, REST API
 ├── camera_processor.py    # Capture, inference and tracking thread
 ├── counting.py            # Line-crossing geometry
