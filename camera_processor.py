@@ -4,18 +4,17 @@ High-performance camera capture and AI inference with mode-based filtering.
 Runs as a daemon thread to avoid blocking the Flask server.
 """
 
-import json
 import threading
 import time
 from collections import defaultdict
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any, ClassVar
 
 import cv2
-import numpy as np
 
+import config
 import counting
+import overlay
 
 # Conditional imports for Pi vs development
 try:
@@ -40,8 +39,6 @@ class CameraProcessor:
     Manages camera capture, YOLO detection, object tracking, and line crossing counting.
     Supports mode-based filtering: 'person' or 'vehicle'.
     """
-
-    CONFIG_PATH = Path(__file__).parent / "config.json"
 
     # COCO class definitions
     PERSON_CLASSES: ClassVar[list[int]] = [0]  # person
@@ -116,38 +113,31 @@ class CameraProcessor:
         self._load_config()
 
     def _load_config(self):
-        """Load configuration from JSON file."""
-        if self.CONFIG_PATH.exists():
-            try:
-                with open(self.CONFIG_PATH) as f:
-                    config = json.load(f)
-                    self._line = config.get("line", self._line)
-                    self._mode = config.get("mode", "person")
-                    self._flip_direction = config.get("flip_direction", False)
-                    # Load ROI config
-                    self._roi = config.get("roi", None)
-                    roi_status = f", roi={self._roi['enabled']}" if self._roi else ""
-                    print(
-                        f"[INFO] Config loaded: mode={self._mode}, "
-                        f"flip={self._flip_direction}, line={self._line}{roi_status}"
-                    )
-            except Exception as e:
-                print(f"[WARN] Failed to load config: {e}")
+        """Restore line, mode, direction and ROI from the last run."""
+        saved = config.load()
+        if not saved:
+            return
+        self._line = saved.get("line", self._line)
+        self._mode = saved.get("mode", "person")
+        self._flip_direction = saved.get("flip_direction", False)
+        self._roi = saved.get("roi", None)
+        roi_status = f", roi={self._roi['enabled']}" if self._roi else ""
+        print(
+            f"[INFO] Config loaded: mode={self._mode}, "
+            f"flip={self._flip_direction}, line={self._line}{roi_status}"
+        )
 
     def _save_config(self):
-        """Save current configuration to JSON file."""
-        config = {
-            "line": self._line,
-            "mode": self._mode,
-            "flip_direction": self._flip_direction,
-            "roi": self._roi,
-            "counts": {"in": self._count_in, "out": self._count_out},
-        }
-        try:
-            with open(self.CONFIG_PATH, "w") as f:
-                json.dump(config, f, indent=2)
-        except Exception as e:
-            print(f"[WARN] Failed to save config: {e}")
+        """Persist the current settings and counters."""
+        config.save(
+            {
+                "line": self._line,
+                "mode": self._mode,
+                "flip_direction": self._flip_direction,
+                "roi": self._roi,
+                "counts": {"in": self._count_in, "out": self._count_out},
+            }
+        )
 
     def _get_active_classes(self):
         """Get YOLO class IDs based on current mode."""
@@ -222,20 +212,10 @@ class CameraProcessor:
 
         display_frame = frame.copy()
 
-        line_start = (self._line[0], self._line[1])
-        line_end = (self._line[2], self._line[3])
-
-        # Draw virtual counting line (bright magenta for visibility)
-        cv2.line(display_frame, line_start, line_end, (255, 0, 255), 2)
-
-        # Draw endpoint circles (white with colored border)
-        cv2.circle(display_frame, line_start, 6, (255, 255, 255), -1)
-        cv2.circle(display_frame, line_start, 6, (255, 0, 255), 1)
-        cv2.circle(display_frame, line_end, 6, (255, 255, 255), -1)
-        cv2.circle(display_frame, line_end, 6, (255, 0, 255), 1)
+        overlay.draw_line(display_frame, self._line)
 
         if self._model is None:
-            self._draw_overlay(display_frame)
+            self._draw_hud(display_frame)
             return display_frame
 
         # ROI processing - crop frame if ROI is enabled
@@ -258,17 +238,7 @@ class CameraProcessor:
             if rw >= 100 and rh >= 100:
                 detect_frame = frame[ry : ry + rh, rx : rx + rw]
                 roi_offset_x, roi_offset_y = rx, ry
-                # Draw ROI rectangle
-                cv2.rectangle(display_frame, (rx, ry), (rx + rw, ry + rh), (0, 200, 255), 2)
-                cv2.putText(
-                    display_frame,
-                    "ROI",
-                    (rx + 5, ry + 20),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (0, 200, 255),
-                    1,
-                )
+                overlay.draw_roi(display_frame, rx, ry, rw, rh)
 
         # Run YOLO tracking with mode-based class filtering
         active_classes = self._get_active_classes()
@@ -282,7 +252,7 @@ class CameraProcessor:
         )
 
         if results[0].boxes is None or results[0].boxes.id is None:
-            self._draw_overlay(display_frame)
+            self._draw_hud(display_frame)
             return display_frame
 
         boxes = results[0].boxes.xyxy.cpu().numpy()
@@ -335,119 +305,22 @@ class CameraProcessor:
                         f"OUT={self._count_out}"
                     )
 
-            # Draw bounding box (cyan for active, green for counted)
-            color = (0, 255, 100) if track_id in self._counted_ids else (255, 255, 0)
-            cv2.rectangle(display_frame, (x1, y1), (x2, y2), color, 1)
-
-            # Draw label with better contrast
-            label = f"{self.CLASS_NAMES.get(cls, 'obj')} #{track_id}"
-            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)
-            cv2.rectangle(display_frame, (x1, y1 - th - 4), (x1 + tw + 4, y1), (0, 0, 0), -1)
-            cv2.putText(
-                display_frame, label, (x1 + 2, y1 - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1
+            overlay.draw_detection(
+                display_frame,
+                box=(x1, y1, x2, y2),
+                label=f"{self.CLASS_NAMES.get(cls, 'obj')} #{track_id}",
+                counted=track_id in self._counted_ids,
+                trail=self._track_history[track_id],
+                center=center,
             )
 
-            # Draw tracking trail (yellow gradient)
-            points = self._track_history[track_id]
-            for i in range(1, len(points)):
-                thickness = max(1, int(np.sqrt(30 / float(i + 1)) * 1.2))
-                cv2.line(display_frame, points[i - 1], points[i], (0, 200, 255), thickness)
-
-            # Draw center point (white with outline)
-            cv2.circle(display_frame, center, 3, (0, 0, 0), -1)
-            cv2.circle(display_frame, center, 2, (255, 255, 255), -1)
-
-        self._draw_overlay(display_frame)
+        self._draw_hud(display_frame)
         return display_frame
 
-    def _draw_overlay(self, frame):
-        """Draw counters, mode, FPS, and direction indicator on frame."""
-
-        # Semi-transparent background for counters (top-left)
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (4, 4), (95, 60), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
-
-        # FPS indicator
-        cv2.putText(
-            frame,
-            f"{self._fps:.1f} fps",
-            (8, 18),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.4,
-            (150, 150, 150),
-            1,
-        )
-
-        # Counter text
-        cv2.putText(
-            frame,
-            f"IN:  {self._count_in}",
-            (8, 38),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 255, 100),
-            1,
-        )
-        cv2.putText(
-            frame,
-            f"OUT: {self._count_out}",
-            (8, 55),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (100, 100, 255),
-            1,
-        )
-
-        # Direction arrows near the line
-        line_cx = (self._line[0] + self._line[2]) // 2
-        line_cy = (self._line[1] + self._line[3]) // 2
-
-        # Calculate perpendicular direction for arrows
-        dx = self._line[2] - self._line[0]
-        dy = self._line[3] - self._line[1]
-        length = np.sqrt(dx * dx + dy * dy)
-        if length > 0:
-            # Perpendicular unit vector
-            px, py = -dy / length, dx / length
-
-            # Arrow offset from line center
-            offset = 30
-            arrow_len = 15
-
-            # IN arrow (green) - perpendicular direction based on flip
-            if not self._flip_direction:
-                in_x, in_y = int(line_cx + px * offset), int(line_cy + py * offset)
-                in_end_x, in_end_y = int(in_x + px * arrow_len), int(in_y + py * arrow_len)
-                out_x, out_y = int(line_cx - px * offset), int(line_cy - py * offset)
-                out_end_x, out_end_y = int(out_x - px * arrow_len), int(out_y - py * arrow_len)
-            else:
-                out_x, out_y = int(line_cx + px * offset), int(line_cy + py * offset)
-                out_end_x, out_end_y = int(out_x + px * arrow_len), int(out_y + py * arrow_len)
-                in_x, in_y = int(line_cx - px * offset), int(line_cy - py * offset)
-                in_end_x, in_end_y = int(in_x - px * arrow_len), int(in_y - py * arrow_len)
-
-            # Draw IN label and arrow
-            cv2.arrowedLine(
-                frame, (in_end_x, in_end_y), (in_x, in_y), (0, 255, 100), 1, tipLength=0.4
-            )
-            cv2.putText(
-                frame, "IN", (in_x - 8, in_y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 100), 1
-            )
-
-            # Draw OUT label and arrow
-            cv2.arrowedLine(
-                frame, (out_end_x, out_end_y), (out_x, out_y), (100, 100, 255), 1, tipLength=0.4
-            )
-            cv2.putText(
-                frame,
-                "OUT",
-                (out_x - 12, out_y - 8),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.4,
-                (100, 100, 255),
-                1,
-            )
+    def _draw_hud(self, frame):
+        """Counters, frame rate and direction arrows."""
+        overlay.draw_hud(frame, self._fps, self._count_in, self._count_out)
+        overlay.draw_direction(frame, self._line, self._flip_direction)
 
     def _check_interval(self):
         """Emit a JSON interval record if enough time has passed."""

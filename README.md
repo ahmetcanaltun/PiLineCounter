@@ -228,26 +228,31 @@ journalctl -u camera_module -f
 ```
 camera_module/
 ├── app.py                 # Flask server: routes, MJPEG stream, REST API
-├── camera_processor.py    # Capture, inference, tracking and counting thread
-├── counting.py            # Line-crossing geometry (no OpenCV, fully tested)
+├── camera_processor.py    # Capture, inference and tracking thread
+├── counting.py            # Line-crossing geometry
+├── overlay.py             # What gets drawn on the frame
+├── config.py              # config.json persistence
 ├── index.html             # The entire web interface (no build step, no CDN)
 ├── requirements.txt
 ├── pyproject.toml         # pytest and ruff configuration
 └── tests/
     ├── conftest.py        # Stubs the camera stack
     ├── test_counting.py   # Crossing rules
+    ├── test_config.py     # Persistence
     └── test_api.py        # HTTP surface
 ```
 
-`counting.py` holds the rules that decide what counts as a crossing and in which
-direction. It deliberately imports nothing from OpenCV or the model runtime, so the
-logic can be read and tested on its own while `camera_processor.py` deals with frames.
+`camera_processor.py` owns the pipeline; the three modules beside it own one concern
+each. `counting.py` decides what crosses the line and in which direction, `overlay.py`
+decides what an operator sees, and `config.py` deals with the file on disk. Only
+`camera_processor.py` and `overlay.py` touch OpenCV, so the counting rules and the
+persistence can both be tested without a camera.
 
 ## Development
 
 ```bash
 pip install pytest ruff
-pytest              # 37 tests, no camera or model required
+pytest              # 44 tests, no camera or model required
 ruff check .        # lint
 ruff format .       # format
 ```
