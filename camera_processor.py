@@ -6,7 +6,6 @@ Runs as a daemon thread to avoid blocking the Flask server.
 
 import threading
 import time
-from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any, ClassVar
 
@@ -15,6 +14,7 @@ import cv2
 import config
 import counting
 import overlay
+import tracks
 
 # Conditional imports for Pi vs development
 try:
@@ -90,9 +90,7 @@ class CameraProcessor:
         # Format: {'enabled': bool, 'x': int, 'y': int, 'width': int, 'height': int}
         self._roi = None
 
-        # Tracking state
-        self._track_history = defaultdict(list)
-        self._counted_ids = set()
+        self._tracks = tracks.TrackStore()
 
         # Camera and model
         self._camera = None
@@ -265,21 +263,17 @@ class CameraProcessor:
             boxes[:, 2] += roi_offset_x  # x2
             boxes[:, 3] += roi_offset_y  # y2
         classes = results[0].boxes.cls.cpu().numpy().astype(int)
+        now = time.time()
 
         for box, track_id, cls in zip(boxes, track_ids, classes, strict=False):
             x1, y1, x2, y2 = map(int, box)
 
             center = counting.bottom_center((x1, y1, x2, y2))
+            self._tracks.seen(track_id, center, now)
 
-            # Update track history
-            self._track_history[track_id].append(center)
-            if len(self._track_history[track_id]) > 30:
-                self._track_history[track_id].pop(0)
-
-            # Check for line crossing
-            if track_id not in self._counted_ids and len(self._track_history[track_id]) >= 2:
-                prev_point = self._track_history[track_id][-2]
-                curr_point = self._track_history[track_id][-1]
+            movement = self._tracks.previous_and_current(track_id)
+            if not self._tracks.is_counted(track_id) and movement is not None:
+                prev_point, curr_point = movement
 
                 direction = counting.crossed(
                     self._line, prev_point, curr_point, self._flip_direction
@@ -291,7 +285,7 @@ class CameraProcessor:
                         else:
                             self._count_out += 1
 
-                    self._counted_ids.add(track_id)
+                    self._tracks.mark_counted(track_id)
                     self._save_config()
 
                     with self._interval_lock:
@@ -309,10 +303,14 @@ class CameraProcessor:
                 display_frame,
                 box=(x1, y1, x2, y2),
                 label=f"{self.CLASS_NAMES.get(cls, 'obj')} #{track_id}",
-                counted=track_id in self._counted_ids,
-                trail=self._track_history[track_id],
+                counted=self._tracks.is_counted(track_id),
+                trail=self._tracks.trail(track_id),
                 center=center,
             )
+
+        forgotten = self._tracks.sweep(now)
+        if forgotten:
+            print(f"[INFO] Forgot {forgotten} stale track(s), {len(self._tracks)} still active")
 
         self._draw_hud(display_frame)
         return display_frame
@@ -426,8 +424,7 @@ class CameraProcessor:
         with self._lock:
             self._count_in = 0
             self._count_out = 0
-            self._counted_ids.clear()
-            self._track_history.clear()
+            self._tracks.clear()
             self._save_config()
         print("[INFO] Counters reset")
 
@@ -441,12 +438,10 @@ class CameraProcessor:
         with self._lock:
             if line is not None:
                 self._line = [int(x) for x in line]
-                self._counted_ids.clear()  # Reset tracking for new line
-                self._track_history.clear()
+                self._tracks.clear()  # a new line invalidates past crossings
             if mode is not None and mode in ("person", "vehicle") and mode != self._mode:
                 self._mode = mode
-                self._counted_ids.clear()
-                self._track_history.clear()
+                self._tracks.clear()
             if flip_direction is not None:
                 self._flip_direction = bool(flip_direction)
             self._save_config()
