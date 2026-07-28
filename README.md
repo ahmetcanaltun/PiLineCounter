@@ -254,7 +254,7 @@ ruff format .       # format
 
 The test suite stubs OpenCV, ultralytics and picamera2 in `tests/conftest.py`, so it
 runs anywhere in under a second without the multi-gigabyte inference stack. CI runs the
-same three commands on Python 3.11, 3.12 and 3.13.
+lint and the tests on Python 3.11, the version Raspberry Pi OS ships.
 
 ## Performance
 
