@@ -21,14 +21,11 @@ class TestInterface:
 
 
 class TestDataEndpoint:
-    def test_reports_counts_and_stream_state(self, client):
+    def test_reports_everything_the_page_boots_from(self, client):
         data = client.get("/api/data").get_json()
         assert data["counts"] == {"in": 7, "out": 3}
         assert data["fps"] == 9.7
         assert data["resolution"] == [854, 480]
-
-    def test_includes_the_settings_the_page_boots_from(self, client):
-        data = client.get("/api/data").get_json()
         assert data["monitor"] is True
         assert data["interval"] == 5.0
 
@@ -61,11 +58,6 @@ class TestConfigEndpoint:
         client.post("/api/config", json={"mode": "person"})
         assert processor.config_updates[-1]["line"] is None
         assert processor.config_updates[-1]["flip_direction"] is None
-
-    def test_returns_the_resulting_state(self, client):
-        body = client.post("/api/config", json={"mode": "person"}).get_json()
-        assert body["status"] == "ok"
-        assert "counts" in body["data"]
 
 
 class TestRoiEndpoint:

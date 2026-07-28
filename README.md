@@ -230,6 +230,7 @@ line-counter/
 ├── app.py                 # Flask server: routes, MJPEG stream, REST API
 ├── camera_processor.py    # Capture, inference and tracking thread
 ├── counting.py            # Line-crossing geometry
+├── tracks.py              # Track memory, with stale entries evicted
 ├── overlay.py             # What gets drawn on the frame
 ├── config.py              # config.json persistence
 ├── index.html             # The entire web interface (no build step, no CDN)
@@ -238,6 +239,7 @@ line-counter/
 └── tests/
     ├── conftest.py        # Stubs the camera stack
     ├── test_counting.py   # Crossing rules
+    ├── test_tracks.py     # Track memory and eviction
     ├── test_config.py     # Persistence
     └── test_api.py        # HTTP surface
 ```
@@ -252,7 +254,7 @@ persistence can both be tested without a camera.
 
 ```bash
 pip install pytest ruff
-pytest              # 44 tests, no camera or model required
+pytest              # 47 tests, no camera or model required
 ruff check .        # lint
 ruff format .       # format
 ```

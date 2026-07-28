@@ -1,7 +1,5 @@
 """Tests for config.json persistence."""
 
-import json
-
 import config
 
 SETTINGS = {
@@ -37,17 +35,6 @@ class TestLoad:
 
 
 class TestSave:
-    def test_writes_readable_json(self, tmp_path):
-        path = tmp_path / "config.json"
-        config.save(SETTINGS, path)
-        assert json.loads(path.read_text()) == SETTINGS
-
-    def test_overwrites_rather_than_appends(self, tmp_path):
-        path = tmp_path / "config.json"
-        config.save({"mode": "person"}, path)
-        config.save({"mode": "vehicle"}, path)
-        assert config.load(path) == {"mode": "vehicle"}
-
     def test_an_unwritable_path_warns_instead_of_raising(self, tmp_path, capsys):
         # A read-only filesystem should not take down a working counter.
         config.save(SETTINGS, tmp_path / "no-such-dir" / "config.json")

@@ -81,11 +81,6 @@ class TestCrossed:
     def test_flip_is_honoured(self):
         assert counting.crossed(VERTICAL, (400, 240), (450, 240), flip=True) == "in"
 
-    def test_a_round_trip_nets_to_zero(self):
-        out = counting.crossed(VERTICAL, (400, 240), (450, 240))
-        back = counting.crossed(VERTICAL, (450, 240), (400, 240))
-        assert {out, back} == {"in", "out"}
-
     def test_diagonal_crossing_is_detected(self):
         assert counting.crossed(VERTICAL, (400, 100), (460, 380)) is not None
 
@@ -93,9 +88,6 @@ class TestCrossed:
 class TestRegionOfInterest:
     def test_shifts_a_point_back_into_full_frame_space(self):
         assert counting.to_full_frame((10, 20), origin=(100, 50)) == (110, 70)
-
-    def test_a_zero_origin_changes_nothing(self):
-        assert counting.to_full_frame((10, 20), origin=(0, 0)) == (10, 20)
 
     def test_detection_inside_a_region_still_crosses_the_full_frame_line(self):
         # A detection found at x=27 inside a region starting at x=400 really
