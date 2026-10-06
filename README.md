@@ -1,6 +1,6 @@
 # Line Counter Edge Device
 
-[![CI](https://github.com/ahmetcanaltun/line-counter/actions/workflows/ci.yml/badge.svg)](https://github.com/wakawakayashi/line-counter/actions/workflows/ci.yml)
+[![CI](https://github.com/ahmetcanaltun/PiLineCounter/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmetcanaltun/PiLineCounter/actions/workflows/ci.yml)
 
 Real-time traffic/people counting system for Raspberry Pi 5 with Camera Module v3. Uses YOLOv11n (NCNN optimized) + ByteTrack for detection and tracking with a web-based interface. Achieves ~10 FPS on Raspberry Pi 5.
 
@@ -35,7 +35,7 @@ sudo apt install -y python3-pip python3-venv libcamera-dev
 ### 2. Create Virtual Environment
 
 ```bash
-cd ~/line-counter
+cd ~/PiLineCounter
 python3 -m venv venv
 source venv/bin/activate
 ```
@@ -202,14 +202,14 @@ After=network.target
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/line-counter
-ExecStart=/home/pi/line-counter/venv/bin/python -u /home/pi/line-counter/app.py
+WorkingDirectory=/home/pi/PiLineCounter
+ExecStart=/home/pi/PiLineCounter/venv/bin/python -u /home/pi/PiLineCounter/app.py
 Restart=on-failure
 RestartSec=5
 
 # config.json is rewritten at runtime, so the app needs write access
 ProtectSystem=full
-ReadWritePaths=/home/pi/line-counter
+ReadWritePaths=/home/pi/PiLineCounter
 
 [Install]
 WantedBy=multi-user.target
@@ -226,7 +226,7 @@ journalctl -u line-counter -f
 ## Project Structure
 
 ```
-line-counter/
+PiLineCounter/
 ├── app.py                 # Flask server: routes, MJPEG stream, REST API
 ├── camera_processor.py    # Capture, inference and tracking thread
 ├── counting.py            # Line-crossing geometry
