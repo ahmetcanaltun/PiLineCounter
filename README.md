@@ -1,6 +1,6 @@
 # Line Counter Edge Device
 
-[![CI](https://github.com/wakawakayashi/line-counter/actions/workflows/ci.yml/badge.svg)](https://github.com/wakawakayashi/line-counter/actions/workflows/ci.yml)
+[![CI](https://github.com/ahmetcanaltun/line-counter/actions/workflows/ci.yml/badge.svg)](https://github.com/wakawakayashi/line-counter/actions/workflows/ci.yml)
 
 Real-time traffic/people counting system for Raspberry Pi 5 with Camera Module v3. Uses YOLOv11n (NCNN optimized) + ByteTrack for detection and tracking with a web-based interface. Achieves ~10 FPS on Raspberry Pi 5.
 
